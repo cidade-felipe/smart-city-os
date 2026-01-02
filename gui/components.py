@@ -351,7 +351,7 @@ class ReportDialog(tk.Toplevel):
         button_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=(10, 0))
         
         ttk.Button(button_frame, text="Fechar", command=self.destroy).pack(side=tk.RIGHT, padx=5)
-        ttk.Button(button_frame, text="Exportar CSV", command=self.export_csv).pack(side=tk.RIGHT, padx=5)
+        ttk.Button(button_frame, text="Exportar relatório", command=self.export_csv).pack(side=tk.RIGHT, padx=5)
         
         # Armazenar referências
         self.tree = tree

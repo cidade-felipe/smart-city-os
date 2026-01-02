@@ -4,7 +4,7 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from functions.conect_db import connect_to_db
+from functions.conect_db import connect_to_db, connection_string
 import psycopg as psy
 import psycopg2
 import psycopg2.extras
@@ -14,6 +14,10 @@ import pandas as pd
 from tabulate import tabulate
 from dotenv import load_dotenv
 from gui.styles import SmartCityStyles
+import pandas as pd
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
 
 # Carregar variáveis de ambiente
 load_dotenv()
@@ -41,6 +45,8 @@ class SmartCityOSGUI:
         # Criar interface
         self.create_widgets()
         self.check_connection()
+
+        self.conection_string = connection_string()
         
     def create_widgets(self):
         # Frame principal
@@ -1494,7 +1500,7 @@ class SmartCityOSGUI:
                 tab_text = self.notebook.tab(current_tab, "text")
                 if "SQL" in tab_text:
                     # Ativar foco com simulação de botão
-                    self.root.after(100, activate_focus)
+                    self.root.after(10, activate_focus)
             except:
                 pass
         
@@ -1558,7 +1564,7 @@ class SmartCityOSGUI:
         self.results_info.pack(side=tk.LEFT)
         
         # Botão de exportação
-        self.export_btn = tk.Button(info_frame, text="📥 Exportar CSV", command=self.export_results,
+        self.export_btn = tk.Button(info_frame, text="📥 Exportar Relatório", command=self.export_results,
                                    bg=self.styles.colors['secondary'], fg=self.styles.colors['white'],
                                    font=self.styles.fonts['button'], relief='flat',
                                    padx=12, pady=6, cursor='hand2', state='disabled')
@@ -1644,8 +1650,7 @@ class SmartCityOSGUI:
             
             # Inserir texto inicial
             self.sql_text.insert(tk.END, "-- Digite sua consulta SQL aqui\n")
-            self.sql_text.insert(tk.END, "SELECT * FROM app_user LIMIT 10;")
-            
+           
             # Configurar tag de comentário
             self.sql_text.tag_add("comment", "1.0", "1.end")
             self.sql_text.tag_config("comment", foreground='#616E88')
@@ -1692,47 +1697,39 @@ class SmartCityOSGUI:
         except Exception as e:
             print(f"Erro ao carregar exemplo: {e}")
             messagebox.showerror("Erro", f"Erro ao carregar exemplo SQL: {str(e)}")
-        
+
     def export_results(self):
-        """Exporta resultados da tabela para CSV"""
+        """Exporta resultados para xlsx ou csv"""
+        query = self.sql_text.get(1.0, tk.END).strip()
+        if not query:
+            messagebox.showwarning("Aviso", "Digite uma consulta SQL!")
+            return
+           
         try:
-            import csv
+            # import csv
             from tkinter import filedialog
             
-            # Obter dados do treeview
-            columns = self.results_tree['columns']
-            rows = []
-            
-            for item in self.results_tree.get_children():
-                values = self.results_tree.item(item)['values']
-                rows.append(values)
-            
-            if not rows:
-                messagebox.showwarning("Aviso", "Não há dados para exportar!")
-                return
-            
+            df_query = pd.read_sql(query, self.conection_string)
             # Dialog para salvar arquivo
             filename = filedialog.asksaveasfilename(
                 defaultextension=".csv",
-                filetypes=[("CSV files", "*.csv"), ("All files", "*.*")],
+                filetypes=[("CSV files", "*.csv"), ("Excel files", "*.xlsx"), ("All files", "*.*")],
                 title="Exportar Resultados"
             )
             
             if filename:
-                with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
-                    writer = csv.writer(csvfile)
-                    
-                    # Escrever cabeçalho
-                    writer.writerow([col.replace('_', ' ').title() for col in columns])
-                    
-                    # Escrever dados
-                    writer.writerows(rows)
-                        
+                
+                if filename.endswith(".xlsx"):
+                    df_query.to_excel(filename, index=False)
+                elif filename.endswith(".csv"):
+                    df_query.to_csv(filename, index=False)
                 messagebox.showinfo("Sucesso", f"Dados exportados para {filename}")
                 self.status_label.config(text=f"Dados exportados para {filename}")
                 
+                
         except Exception as e:
             messagebox.showerror("Erro", f"Erro ao exportar: {str(e)}")
+            print('Erro ao exportar: ', e)
         
     def add_citizen_dialog(self):
         messagebox.showinfo("Em desenvolvimento", "Funcionalidade de adicionar cidadão em desenvolvimento!")
