@@ -15,8 +15,7 @@ from tabulate import tabulate
 from dotenv import load_dotenv
 from gui.styles import SmartCityStyles
 import pandas as pd
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+
 
 
 # Carregar variáveis de ambiente
@@ -151,6 +150,7 @@ class SmartCityOSGUI:
         # Botões de navegação com estilos melhorados
         buttons_data = [
             ("📊 Dashboard", self.show_dashboard, "primary"),
+            ("👤 Usuários", self.show_users, "normal"),
             ("👥 Cidadãos", self.show_citizens, "normal"),
             ("🚗 Veículos", self.show_vehicles, "normal"),
             ("📹 Sensores", self.show_sensors, "normal"),
@@ -299,6 +299,11 @@ class SmartCityOSGUI:
                     # Estatísticas gerais
                     stats = {}
                     
+                    # Usuários
+                    cur.execute("SELECT COUNT(*) as total, COUNT(CASE WHEN created_at >= CURRENT_DATE - INTERVAL '30 days' THEN 1 END) as this_month FROM app_user")
+                    user_stats = cur.fetchone()
+                    stats['users'] = user_stats
+                    
                     # Cidadãos
                     cur.execute("SELECT COUNT(*) as total, COUNT(CASE WHEN debt > 0 THEN 1 END) as with_debt, COALESCE(SUM(debt), 0) as total_debt FROM citizen")
                     citizen_stats = cur.fetchone()
@@ -353,16 +358,18 @@ class SmartCityOSGUI:
         
         # Cards de estatísticas com design moderno
         cards_data = [
+            ("👤 Usuários", stats['users']['total'], stats['users']['this_month'], 
+             f"Novos este mês", self.styles.colors['primary']),
             ("👥 Cidadãos", stats['citizens']['total'], stats['citizens']['with_debt'], 
-             f"R$ {stats['citizens']['total_debt']:.2f}", self.styles.colors['primary']),
+             f"R$ {stats['citizens']['total_debt']:.2f}", self.styles.colors['success']),
             ("🚗 Veículos", stats['vehicles']['total'], stats['vehicles']['active'], 
-             f"{stats['vehicles']['total'] - stats['vehicles']['active']} bloqueados", self.styles.colors['success']),
+             f"{stats['vehicles']['total'] - stats['vehicles']['active']} bloqueados", self.styles.colors['warning']),
             ("⚠️ Incidentes", stats['incidents']['total'], stats['incidents']['this_week'], 
-             f"Média: {stats['incidents']['total']/30:.1f}/dia", self.styles.colors['warning']),
+             f"Média: {stats['incidents']['total']/30:.1f}/dia", self.styles.colors['accent']),
             ("💰 Multas", stats['fines']['total'], stats['fines']['pending'], 
-             f"R$ {stats['fines']['total_amount']:.2f}", self.styles.colors['accent']),
+             f"R$ {stats['fines']['total_amount']:.2f}", self.styles.colors['secondary']),
             ("📹 Sensores", stats['sensors']['total'], stats['sensors']['active'], 
-             f"{stats['sensors']['total'] - stats['sensors']['active']} inativos", self.styles.colors['secondary']),
+             f"{stats['sensors']['total'] - stats['sensors']['active']} inativos", self.styles.colors['dark']),
         ]
         
         # Criar cards em grid
@@ -405,7 +412,9 @@ class SmartCityOSGUI:
         main_number.pack(anchor='w')
         
         # Label secundário
-        if title == "👥 Cidadãos":
+        if title == "👤 Usuários":
+            secondary_text = f"Novos este mês: {active}"
+        elif title == "👥 Cidadãos":
             secondary_text = f"Com dívida: {active}"
         elif title == "🚗 Veículos":
             secondary_text = f"Ativos: {active}"
@@ -413,6 +422,8 @@ class SmartCityOSGUI:
             secondary_text = f"Esta semana: {active}"
         elif title == "💰 Multas":
             secondary_text = f"Pendentes: {active}"
+        elif title == "📹 Sensores":
+            secondary_text = f"Ativos: {active}"
         else:
             secondary_text = f"Ativos: {active}"
             
@@ -427,6 +438,186 @@ class SmartCityOSGUI:
         
         return card
         
+    def show_users(self):
+        self.clear_content()
+        
+        if not self.connected:
+            messagebox.showwarning("Aviso", "Conecte-se ao banco de dados primeiro!")
+            return
+            
+        try:
+            with psy.connect(self.get_connection_string()) as conn:
+                with conn.cursor(row_factory=dict_row) as cur:
+                    # Query para usuários
+                    cur.execute("""
+                        SELECT id, first_name, last_name, email, cpf, phone, 
+                               address, birth_date, username, created_at
+                        FROM app_user
+                        ORDER BY first_name, last_name
+                    """)
+                    users = cur.fetchall()
+                    
+                    # Header estilizado
+                    header_frame = tk.Frame(self.content_frame, bg=self.styles.colors['card'])
+                    header_frame.pack(fill=tk.X, padx=20, pady=(20, 10))
+                    
+                    title_label = tk.Label(header_frame, text="👤 Gestão de Usuários", 
+                                          bg=self.styles.colors['card'], fg=self.styles.colors['text_primary'],
+                                          font=self.styles.fonts['title'])
+                    title_label.pack(side=tk.LEFT, padx=20, pady=15)
+                    
+                    # Botões de ação
+                    button_frame = tk.Frame(header_frame, bg=self.styles.colors['card'])
+                    button_frame.pack(side=tk.RIGHT, padx=20, pady=15)
+                    
+                    add_btn = tk.Button(button_frame, text="➕ Adicionar Usuário", command=lambda: messagebox.showinfo("Em breve", "Funcionalidade de adicionar usuário em desenvolvimento!"),
+                                      bg=self.styles.colors['success'], fg=self.styles.colors['white'],
+                                      font=self.styles.fonts['button'], relief='flat',
+                                      padx=12, pady=6, cursor='hand2')
+                    add_btn.pack(side=tk.RIGHT, padx=5)
+                    
+                    search_btn = tk.Button(button_frame, text="🔍 Buscar por Email", command=lambda: messagebox.showinfo("Em breve", "Funcionalidade de busca em desenvolvimento!"),
+                                         bg=self.styles.colors['primary'], fg=self.styles.colors['white'],
+                                         font=self.styles.fonts['button'], relief='flat',
+                                         padx=12, pady=6, cursor='hand2')
+                    search_btn.pack(side=tk.RIGHT, padx=5)
+                    
+                    refresh_btn = tk.Button(button_frame, text="🔄 Atualizar", command=self.show_users,
+                                          bg=self.styles.colors['secondary'], fg=self.styles.colors['white'],
+                                          font=self.styles.fonts['button'], relief='flat',
+                                          padx=12, pady=6, cursor='hand2')
+                    refresh_btn.pack(side=tk.RIGHT, padx=5)
+                    
+                    # Cards de estatísticas
+                    self.create_users_stats(users)
+                    
+                    # Tabela de usuários
+                    self.create_users_table(users)
+                    
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao carregar usuários: {str(e)}")
+            
+    def create_users_stats(self, users):
+        try:
+            # Calcular estatísticas
+            total_users = len(users)
+            
+            # Contar usuários com email e telefone
+            users_with_email = len([u for u in users if u['email']]) if users else 0
+            users_with_phone = len([u for u in users if u['phone']]) if users else 0
+            
+            # Frame de estatísticas
+            stats_frame = tk.Frame(self.content_frame, bg=self.styles.colors['background'])
+            stats_frame.pack(fill=tk.X, padx=20, pady=(10, 20))
+            
+            # Cards
+            cards_data = [
+                ("👤 Total Usuários", total_users, f"100%", self.styles.colors['primary']),
+                ("📧 Com Email", users_with_email, f"{(users_with_email/total_users*100):.1f}%" if total_users > 0 else "0%", self.styles.colors['success']),
+                ("📱 Com Telefone", users_with_phone, f"{(users_with_phone/total_users*100):.1f}%" if total_users > 0 else "0%", self.styles.colors['warning'])
+            ]
+            
+            for i, (title, value, extra, color) in enumerate(cards_data):
+                card = self.create_users_stat_card(stats_frame, title, value, extra, color)
+                card.pack(side=tk.LEFT, padx=10, fill=tk.BOTH, expand=True)
+        except Exception as e:
+            print(f"Erro ao criar estatísticas de usuários: {e}")
+            # Não mostrar erro ao usuário, apenas não criar os stats
+            
+    def create_users_stat_card(self, parent, title, value, extra, color):
+        card = tk.Frame(parent, bg=self.styles.colors['card'], relief='solid', bd=1)
+        
+        # Título
+        title_label = tk.Label(card, text=title, 
+                              bg=self.styles.colors['card'], fg=self.styles.colors['text_secondary'],
+                              font=self.styles.fonts['small'])
+        title_label.pack(pady=(10, 5))
+        
+        # Valor principal
+        value_label = tk.Label(card, text=str(value), 
+                               bg=self.styles.colors['card'], fg=color,
+                               font=self.styles.fonts['header'])
+        value_label.pack()
+        
+        # Extra
+        extra_label = tk.Label(card, text=extra, 
+                              bg=self.styles.colors['card'], fg=self.styles.colors['text_secondary'],
+                              font=self.styles.fonts['small'])
+        extra_label.pack(pady=(0, 10))
+        
+        return card
+        
+    def create_users_table(self, users):
+        # Frame da tabela
+        table_frame = tk.Frame(self.content_frame, bg=self.styles.colors['card'])
+        table_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=(0, 20))
+        
+        # Treeview para usuários
+        columns = ('ID', 'Nome', 'Email', 'CPF', 'Telefone', 'Endereço', 'Nascimento', 'Cadastro')
+        self.users_tree = ttk.Treeview(table_frame, columns=columns, show='headings', height=15)
+        
+        # Configurar colunas
+        for col in columns:
+            self.users_tree.heading(col, text=col)
+            if col == 'ID':
+                self.users_tree.column(col, width=50)
+            elif col in ['CPF', 'Telefone']:
+                self.users_tree.column(col, width=120)
+            elif col == 'Nascimento':
+                self.users_tree.column(col, width=100)
+            elif col == 'Cadastro':
+                self.users_tree.column(col, width=100)
+            else:
+                self.users_tree.column(col, width=150)
+                
+        # Scrollbars
+        v_scrollbar = ttk.Scrollbar(table_frame, orient=tk.VERTICAL, command=self.users_tree.yview)
+        h_scrollbar = ttk.Scrollbar(table_frame, orient=tk.HORIZONTAL, command=self.users_tree.xview)
+        self.users_tree.configure(yscrollcommand=v_scrollbar.set, xscrollcommand=h_scrollbar.set)
+        
+        # Grid
+        self.users_tree.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        v_scrollbar.grid(row=0, column=1, sticky=(tk.N, tk.S))
+        h_scrollbar.grid(row=1, column=0, sticky=(tk.W, tk.E))
+        
+        table_frame.columnconfigure(0, weight=1)
+        table_frame.rowconfigure(0, weight=1)
+        
+        # Inserir dados
+        for user in users:
+            full_name = f"{user['first_name']} {user['last_name']}"
+            
+            # Tratar datas de forma segura
+            if user['birth_date'] and hasattr(user['birth_date'], 'strftime'):
+                birth_date = user['birth_date'].strftime('%d/%m/%Y')
+            else:
+                birth_date = 'N/A'
+                
+            if user['created_at'] and hasattr(user['created_at'], 'strftime'):
+                created_date = user['created_at'].strftime('%d/%m/%Y')
+            else:
+                created_date = 'N/A'
+            
+            self.users_tree.insert('', tk.END, values=(
+                user['id'],
+                full_name,
+                user['email'],
+                user['cpf'] or 'N/A',
+                user['phone'] or 'N/A',
+                user['address'][:30] + '...' if user['address'] and len(user['address']) > 30 else user['address'] or 'N/A',
+                birth_date,
+                created_date
+            ))
+            
+        # Frame de informações
+        info_frame = tk.Frame(self.content_frame, bg=self.styles.colors['background'])
+        info_frame.pack(fill=tk.X, padx=20, pady=(0, 20))
+        
+        info_label = tk.Label(info_frame, text=f"👤 {len(users)} usuários registrados",
+                            bg=self.styles.colors['background'], fg=self.styles.colors['text_secondary'],
+                            font=self.styles.fonts['small'])
+        info_label.pack(side=tk.LEFT)
+                
     def show_citizens(self):
         self.clear_content()
         
@@ -434,25 +625,114 @@ class SmartCityOSGUI:
             messagebox.showwarning("Aviso", "Conecte-se ao banco de dados primeiro!")
             return
             
+        try:
+            with psy.connect(self.get_connection_string()) as conn:
+                with conn.cursor(row_factory=dict_row) as cur:
+                    # Query para cidadãos com JOIN em app_user
+                    cur.execute("""
+                        SELECT c.id, u.first_name, u.last_name, u.email, u.cpf, 
+                               c.wallet_balance, c.debt, c.allowed
+                        FROM citizen c
+                        JOIN app_user u ON c.app_user_id = u.id
+                        ORDER BY u.first_name, u.last_name
+                    """)
+                    citizens = cur.fetchall()
+                    
+                    # Header estilizado
+                    header_frame = tk.Frame(self.content_frame, bg=self.styles.colors['card'])
+                    header_frame.pack(fill=tk.X, padx=20, pady=(20, 10))
+                    
+                    title_label = tk.Label(header_frame, text="👥 Gestão de Cidadãos", 
+                                          bg=self.styles.colors['card'], fg=self.styles.colors['text_primary'],
+                                          font=self.styles.fonts['title'])
+                    title_label.pack(side=tk.LEFT, padx=20, pady=15)
+                    
+                    # Botões de ação
+                    button_frame = tk.Frame(header_frame, bg=self.styles.colors['card'])
+                    button_frame.pack(side=tk.RIGHT, padx=20, pady=15)
+                    
+                    add_btn = tk.Button(button_frame, text="➕ Adicionar Cidadão", command=lambda: messagebox.showinfo("Em breve", "Funcionalidade de adicionar cidadão em desenvolvimento!"),
+                                      bg=self.styles.colors['success'], fg=self.styles.colors['white'],
+                                      font=self.styles.fonts['button'], relief='flat',
+                                      padx=12, pady=6, cursor='hand2')
+                    add_btn.pack(side=tk.RIGHT, padx=5)
+                    
+                    search_btn = tk.Button(button_frame, text="🔍 Buscar por CPF", command=lambda: messagebox.showinfo("Em breve", "Funcionalidade de busca em desenvolvimento!"),
+                                         bg=self.styles.colors['primary'], fg=self.styles.colors['white'],
+                                         font=self.styles.fonts['button'], relief='flat',
+                                         padx=12, pady=6, cursor='hand2')
+                    search_btn.pack(side=tk.RIGHT, padx=5)
+                    
+                    refresh_btn = tk.Button(button_frame, text="🔄 Atualizar", command=self.show_citizens,
+                                          bg=self.styles.colors['secondary'], fg=self.styles.colors['white'],
+                                          font=self.styles.fonts['button'], relief='flat',
+                                          padx=12, pady=6, cursor='hand2')
+                    refresh_btn.pack(side=tk.RIGHT, padx=5)
+                    
+                    self.create_citizens_stats(citizens)
+                    # Tabela de cidadãos
+                    self.create_citizens_table(citizens)
+                    
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao carregar cidadãos: {str(e)}")
+            
+    def create_citizens_stats(self, citizens):
+        try:
+            # Calcular estatísticas
+            total_citizens = len(citizens)
+            active_citizens = len([c for c in citizens if c['allowed']]) if citizens else 0
+            inactive_citizens = len([c for c in citizens if not c['allowed']]) if citizens else 0
+            total_balance = sum(c['wallet_balance'] for c in citizens if c['wallet_balance']) if citizens else 0
+            total_debt = sum(c['debt'] for c in citizens if c['debt']) if citizens else 0
+            
+            # Frame de estatísticas
+            stats_frame = tk.Frame(self.content_frame, bg=self.styles.colors['background'])
+            stats_frame.pack(fill=tk.X, padx=20, pady=(10, 20))
+            
+            # Cards
+            cards_data = [
+                ("👥 Total Cidadãos", total_citizens, f"R$ {total_balance:,.2f}", self.styles.colors['primary']),
+                ("✅ Ativos", active_citizens, f"{(active_citizens/total_citizens*100):.1f}%" if total_citizens > 0 else "0%", self.styles.colors['success']),
+                ("🔴 Inativos", inactive_citizens, f"R$ {total_debt:,.2f}", self.styles.colors['warning'])
+            ]
+            
+            for i, (title, value, extra, color) in enumerate(cards_data):
+                card = self.create_citizens_stat_card(stats_frame, title, value, extra, color)
+                card.pack(side=tk.LEFT, padx=10, fill=tk.BOTH, expand=True)
+        except Exception as e:
+            print(f"Erro ao criar estatísticas de cidadãos: {e}")
+            # Não mostrar erro ao usuário, apenas não criar os stats
+            
+    def create_citizens_stat_card(self, parent, title, value, extra, color):
+        card = tk.Frame(parent, bg=self.styles.colors['card'], relief='solid', bd=1)
+        
         # Título
-        title = ttk.Label(self.content_frame, text="👥 Gestão de Cidadãos", font=('Arial', 16, 'bold'))
-        title.pack(pady=10)
+        title_label = tk.Label(card, text=title, 
+                              bg=self.styles.colors['card'], fg=self.styles.colors['text_secondary'],
+                              font=self.styles.fonts['small'])
+        title_label.pack(pady=(10, 5))
         
-        # Frame de controles
-        control_frame = ttk.Frame(self.content_frame)
-        control_frame.pack(fill=tk.X, padx=20, pady=5)
+        # Valor principal
+        value_label = tk.Label(card, text=str(value), 
+                               bg=self.styles.colors['card'], fg=color,
+                               font=self.styles.fonts['header'])
+        value_label.pack()
         
-        # Botões
-        ttk.Button(control_frame, text="🔄 Atualizar", command=self.load_citizens).pack(side=tk.LEFT, padx=5)
-        ttk.Button(control_frame, text="➕ Adicionar Cidadão", command=self.add_citizen_dialog).pack(side=tk.LEFT, padx=5)
-        ttk.Button(control_frame, text="🔍 Buscar por CPF", command=self.search_citizen_by_cpf).pack(side=tk.LEFT, padx=5)
+        # Extra
+        extra_label = tk.Label(card, text=extra, 
+                              bg=self.styles.colors['card'], fg=self.styles.colors['text_secondary'],
+                              font=self.styles.fonts['small'])
+        extra_label.pack(pady=(0, 10))
         
+        return card
+        
+    def create_citizens_table(self, citizens):
         # Frame da tabela
-        table_frame = ttk.Frame(self.content_frame)
-        table_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+        table_frame = tk.Frame(self.content_frame, bg=self.styles.colors['card'])
+        table_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=(0, 20))
         
         # Treeview para cidadãos
-        columns = ('ID', 'Nome', 'CPF', 'Email', 'Saldo', 'Dívida', 'Status')
+        columns = ('ID', 'Nome', 'Email', 'CPF', 'Saldo', 'Dívida', 'Status')
         self.citizens_tree = ttk.Treeview(table_frame, columns=columns, show='headings', height=15)
         
         # Configurar colunas
@@ -478,48 +758,30 @@ class SmartCityOSGUI:
         table_frame.columnconfigure(0, weight=1)
         table_frame.rowconfigure(0, weight=1)
         
-        # Carregar dados
-        self.load_citizens()
+        # Inserir dados
+        for citizen in citizens:
+            full_name = f"{citizen['first_name']} {citizen['last_name']}"
+            status = "✅ Ativo" if citizen['allowed'] else "🔴 Inativo"
+            
+            self.citizens_tree.insert('', tk.END, values=(
+                citizen['id'],
+                full_name,
+                citizen['email'] or 'N/A',
+                citizen['cpf'] or 'N/A',
+                f"R$ {citizen['wallet_balance']:,.2f}" if citizen['wallet_balance'] else 'R$ 0,00',
+                f"R$ {citizen['debt']:,.2f}" if citizen['debt'] else 'R$ 0,00',
+                status
+            ))
+            
+        # Frame de informações
+        info_frame = tk.Frame(self.content_frame, bg=self.styles.colors['background'])
+        info_frame.pack(fill=tk.X, padx=20, pady=(0, 20))
         
-    def load_citizens(self):
-        if not self.connected:
-            return
-            
-        try:
-            # Limpar treeview
-            for item in self.citizens_tree.get_children():
-                self.citizens_tree.delete(item)
+        info_label = tk.Label(info_frame, text=f"👥 {len(citizens)} cidadãos registrados",
+                            bg=self.styles.colors['background'], fg=self.styles.colors['text_secondary'],
+                            font=self.styles.fonts['small'])
+        info_label.pack(side=tk.LEFT)
                 
-            with psy.connect(self.get_connection_string()) as conn:
-                with conn.cursor(row_factory=dict_row) as cur:
-                    cur.execute("""
-                        SELECT c.id, u.first_name || ' ' || u.last_name as name, u.cpf, u.email,
-                               c.wallet_balance, c.debt, c.allowed
-                        FROM citizen c
-                        JOIN app_user u ON c.app_user_id = u.id
-                        ORDER BY c.id
-                    """)
-                    
-                    citizens = cur.fetchall()
-                    
-                    for citizen in citizens:
-                        status = "✅ Ativo" if citizen['allowed'] else "🚫 Bloqueado"
-                        values = (
-                            citizen['id'],
-                            citizen['name'],
-                            citizen['cpf'],
-                            citizen['email'],
-                            f"R$ {citizen['wallet_balance']:.2f}",
-                            f"R$ {citizen['debt']:.2f}",
-                            status
-                        )
-                        self.citizens_tree.insert('', tk.END, values=values)
-                        
-                    self.status_label.config(text=f"Carregados {len(citizens)} cidadãos")
-                    
-        except Exception as e:
-            messagebox.showerror("Erro", f"Erro ao carregar cidadãos: {str(e)}")
-            
     def show_vehicles(self):
         self.clear_content()
         
@@ -527,21 +789,111 @@ class SmartCityOSGUI:
             messagebox.showwarning("Aviso", "Conecte-se ao banco de dados primeiro!")
             return
             
+        try:
+            with psy.connect(self.get_connection_string()) as conn:
+                with conn.cursor(row_factory=dict_row) as cur:
+                    # Query para veículos com JOIN em app_user e citizen
+                    cur.execute("""
+                        SELECT v.id, v.license_plate, v.model, v.year, v.allowed,
+                               u.first_name, u.last_name
+                        FROM vehicle v
+                        JOIN app_user u ON v.app_user_id = u.id
+                        LEFT JOIN citizen c ON v.citizen_id = c.id
+                        ORDER BY v.license_plate
+                    """)
+                    vehicles = cur.fetchall()
+                                       
+                    # Header estilizado
+                    header_frame = tk.Frame(self.content_frame, bg=self.styles.colors['card'])
+                    header_frame.pack(fill=tk.X, padx=20, pady=(20, 10))
+                    
+                    title_label = tk.Label(header_frame, text="🚗 Gestão de Veículos", 
+                                          bg=self.styles.colors['card'], fg=self.styles.colors['text_primary'],
+                                          font=self.styles.fonts['title'])
+                    title_label.pack(side=tk.LEFT, padx=20, pady=15)
+                    
+                    # Botões de ação
+                    button_frame = tk.Frame(header_frame, bg=self.styles.colors['card'])
+                    button_frame.pack(side=tk.RIGHT, padx=20, pady=15)
+                    
+                    add_btn = tk.Button(button_frame, text="➕ Adicionar Veículo", command=lambda: messagebox.showinfo("Em breve", "Funcionalidade de adicionar veículo em desenvolvimento!"),
+                                      bg=self.styles.colors['success'], fg=self.styles.colors['white'],
+                                      font=self.styles.fonts['button'], relief='flat',
+                                      padx=12, pady=6, cursor='hand2')
+                    add_btn.pack(side=tk.RIGHT, padx=5)
+                    
+                    search_btn = tk.Button(button_frame, text="🔍 Buscar por Placa", command=lambda: messagebox.showinfo("Em breve", "Funcionalidade de busca em desenvolvimento!"),
+                                         bg=self.styles.colors['primary'], fg=self.styles.colors['white'],
+                                         font=self.styles.fonts['button'], relief='flat',
+                                         padx=12, pady=6, cursor='hand2')
+                    search_btn.pack(side=tk.RIGHT, padx=5)
+                    
+                    refresh_btn = tk.Button(button_frame, text="� Atualizar", command=self.show_vehicles,
+                                          bg=self.styles.colors['secondary'], fg=self.styles.colors['white'],
+                                          font=self.styles.fonts['button'], relief='flat',
+                                          padx=12, pady=6, cursor='hand2')
+                    refresh_btn.pack(side=tk.RIGHT, padx=5)
+                    
+               
+                    self.create_vehicles_stats(vehicles)
+                    # Tabela de veículos
+                    self.create_vehicles_table(vehicles)
+                    
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao carregar veículos: {str(e)}")
+            
+    def create_vehicles_stats(self, vehicles):
+        try:
+            # Calcular estatísticas
+            total_vehicles = len(vehicles)
+            active_vehicles = len([v for v in vehicles if v['allowed']]) if vehicles else 0
+            inactive_vehicles = len([v for v in vehicles if not v['allowed']]) if vehicles else 0
+            
+            # Frame de estatísticas
+            stats_frame = tk.Frame(self.content_frame, bg=self.styles.colors['background'])
+            stats_frame.pack(fill=tk.X, padx=20, pady=(10, 20))
+            
+            # Cards
+            cards_data = [
+                ("🚗 Total Veículos", total_vehicles, f"100%", self.styles.colors['primary']),
+                ("✅ Ativos", active_vehicles, f"{(active_vehicles/total_vehicles*100):.1f}%" if total_vehicles > 0 else "0%", self.styles.colors['success']),
+                ("🔴 Inativos", inactive_vehicles, f"{(inactive_vehicles/total_vehicles*100):.1f}%" if total_vehicles > 0 else "0%", self.styles.colors['warning'])
+            ]
+            
+            for i, (title, value, extra, color) in enumerate(cards_data):
+                card = self.create_vehicles_stat_card(stats_frame, title, value, extra, color)
+                card.pack(side=tk.LEFT, padx=10, fill=tk.BOTH, expand=True)
+        except Exception as e:
+            print(f"Erro ao criar estatísticas de veículos: {e}")
+            # Não mostrar erro ao usuário, apenas não criar os stats
+            
+    def create_vehicles_stat_card(self, parent, title, value, extra, color):
+        card = tk.Frame(parent, bg=self.styles.colors['card'], relief='solid', bd=1)
+        
         # Título
-        title = ttk.Label(self.content_frame, text="🚗 Gestão de Veículos", font=('Arial', 16, 'bold'))
-        title.pack(pady=10)
+        title_label = tk.Label(card, text=title, 
+                              bg=self.styles.colors['card'], fg=self.styles.colors['text_secondary'],
+                              font=self.styles.fonts['small'])
+        title_label.pack(pady=(10, 5))
         
-        # Frame de controles
-        control_frame = ttk.Frame(self.content_frame)
-        control_frame.pack(fill=tk.X, padx=20, pady=5)
+        # Valor principal
+        value_label = tk.Label(card, text=str(value), 
+                               bg=self.styles.colors['card'], fg=color,
+                               font=self.styles.fonts['header'])
+        value_label.pack()
         
-        ttk.Button(control_frame, text="🔄 Atualizar", command=self.load_vehicles).pack(side=tk.LEFT, padx=5)
-        ttk.Button(control_frame, text="➕ Adicionar Veículo", command=self.add_vehicle_dialog).pack(side=tk.LEFT, padx=5)
-        ttk.Button(control_frame, text="🔍 Buscar por Placa", command=self.search_vehicle_by_plate).pack(side=tk.LEFT, padx=5)
+        # Extra
+        extra_label = tk.Label(card, text=extra, 
+                              bg=self.styles.colors['card'], fg=self.styles.colors['text_secondary'],
+                              font=self.styles.fonts['small'])
+        extra_label.pack(pady=(0, 10))
         
+        return card
+        
+    def create_vehicles_table(self, vehicles):
         # Frame da tabela
-        table_frame = ttk.Frame(self.content_frame)
-        table_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+        table_frame = tk.Frame(self.content_frame, bg=self.styles.colors['card'])
+        table_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=(0, 20))
         
         # Treeview para veículos
         columns = ('ID', 'Placa', 'Modelo', 'Ano', 'Proprietário', 'Status')
@@ -570,48 +922,30 @@ class SmartCityOSGUI:
         table_frame.columnconfigure(0, weight=1)
         table_frame.rowconfigure(0, weight=1)
         
-        # Carregar dados
-        self.load_vehicles()
-        
-    def load_vehicles(self):
-        if not self.connected:
-            return
+        # Inserir dados
+        for vehicle in vehicles:
+            owner_name = f"{vehicle['first_name']} {vehicle['last_name']}" if vehicle['first_name'] and vehicle['last_name'] else "N/A"
+            status = "✅ Ativo" if vehicle['allowed'] else "🔴 Inativo"
             
-        try:
-            # Limpar treeview
-            for item in self.vehicles_tree.get_children():
-                self.vehicles_tree.delete(item)
-                
-            with psy.connect(self.get_connection_string()) as conn:
-                with conn.cursor(row_factory=dict_row) as cur:
-                    cur.execute("""
-                        SELECT v.id, v.license_plate, v.model, v.year,
-                               u.first_name || ' ' || u.last_name as owner_name,
-                               v.allowed
-                        FROM vehicle v
-                        JOIN app_user u ON v.app_user_id = u.id
-                        ORDER BY v.id
-                    """)
-                    
-                    vehicles = cur.fetchall()
-                    
-                    for vehicle in vehicles:
-                        status = "✅ Ativo" if vehicle['allowed'] else "🚫 Bloqueado"
-                        values = (
-                            vehicle['id'],
-                            vehicle['license_plate'],
-                            vehicle['model'],
-                            vehicle['year'],
-                            vehicle['owner_name'],
-                            status
-                        )
-                        self.vehicles_tree.insert('', tk.END, values=values)
-                        
-                    self.status_label.config(text=f"Carregados {len(vehicles)} veículos")
-                    
-        except Exception as e:
-            messagebox.showerror("Erro", f"Erro ao carregar veículos: {str(e)}")
-    
+            self.vehicles_tree.insert('', tk.END, values=(
+                vehicle['id'],
+                vehicle['license_plate'],
+                vehicle['model'],
+                vehicle['year'],
+                owner_name,
+                status
+            ))
+            
+        # Frame de informações
+        info_frame = tk.Frame(self.content_frame, bg=self.styles.colors['background'])
+        info_frame.pack(fill=tk.X, padx=20, pady=(0, 20))
+        
+        info_label = tk.Label(info_frame, text=f"🚗 {len(vehicles)} veículos registrados",
+                            bg=self.styles.colors['background'], fg=self.styles.colors['text_secondary'],
+                            font=self.styles.fonts['small'])
+        info_label.pack(side=tk.LEFT)
+        
+        
     def show_sensors(self):
         self.clear_content()
         
@@ -860,18 +1194,6 @@ class SmartCityOSGUI:
                     """)
                     fines = cur.fetchall()
                     
-                    # Se não houver dados, mostrar mensagem
-                    if not fines:
-                        self.clear_content()
-                        msg_frame = tk.Frame(self.content_frame, bg=self.styles.colors['card'])
-                        msg_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
-                        
-                        msg_label = tk.Label(msg_frame, text="💰 Nenhuma multa encontrada no sistema",
-                                          bg=self.styles.colors['card'], fg=self.styles.colors['text_secondary'],
-                                          font=self.styles.fonts['normal'])
-                        msg_label.pack(pady=50)
-                        return
-                    
                     # Header estilizado
                     header_frame = tk.Frame(self.content_frame, bg=self.styles.colors['card'])
                     header_frame.pack(fill=tk.X, padx=20, pady=(20, 10))
@@ -1071,6 +1393,21 @@ class SmartCityOSGUI:
         stats = {}
         
         try:
+            # Estatísticas de Usuários
+            cur.execute("""
+                SELECT COUNT(*) as total,
+                       COUNT(CASE WHEN created_at >= CURRENT_DATE - INTERVAL '30 days' THEN 1 END) as this_month,
+                       COUNT(CASE WHEN created_at >= CURRENT_DATE - INTERVAL '7 days' THEN 1 END) as this_week,
+                       COUNT(CASE WHEN phone IS NOT NULL AND phone != '' THEN 1 END) as with_phone,
+                       COUNT(CASE WHEN email IS NOT NULL AND email != '' THEN 1 END) as with_email
+                FROM app_user
+            """)
+            stats['users'] = cur.fetchone()
+        except Exception as e:
+            print(f"Erro ao carregar estatísticas de usuários: {e}")
+            stats['users'] = {'total': 0, 'this_month': 0, 'this_week': 0, 'with_phone': 0, 'with_email': 0}
+        
+        try:
             # Estatísticas de Cidadãos
             cur.execute("""
                 SELECT COUNT(*) as total, 
@@ -1234,14 +1571,16 @@ class SmartCityOSGUI:
         
         # Cards principais
         main_cards = [
+            ("👤 Usuários", stats['users']['total'], 
+             f"{stats['users']['this_month']} novos este mês", self.styles.colors['primary']),
             ("👥 Cidadãos", stats['citizens']['total'], 
-             f"R$ {stats['citizens']['total_debt']:,.2f}", self.styles.colors['primary']),
+             f"R$ {stats['citizens']['total_debt']:,.2f}", self.styles.colors['success']),
             ("🚗 Veículos", stats['vehicles']['total'],
-             f"{stats['vehicles']['active']} ativos", self.styles.colors['success']),
+             f"{stats['vehicles']['active']} ativos", self.styles.colors['warning']),
             ("⚠️ Incidentes", stats['incidents']['total_incidents'],
-             f"{stats['incidents']['last_7_days']} esta semana", self.styles.colors['warning']),
+             f"{stats['incidents']['last_7_days']} esta semana", self.styles.colors['accent']),
             ("💰 Multas", stats['fines']['total_fines'],
-             f"R$ {stats['fines']['total_amount']:,.2f}", self.styles.colors['accent'])
+             f"R$ {stats['fines']['total_amount']:,.2f}", self.styles.colors['secondary'])
         ]
         
         for i, (title, value, extra, color) in enumerate(main_cards):
@@ -1251,6 +1590,27 @@ class SmartCityOSGUI:
     def create_secondary_stats_cards(self, parent, stats):
         # Cards secundários com tratamento de divisão por zero
         secondary_cards = []
+        
+        # Usuários com Telefone
+        users_total = stats['users']['total']
+        users_with_phone = stats['users']['with_phone']
+        phone_percent = (users_with_phone / users_total * 100) if users_total > 0 else 0
+        secondary_cards.append((
+            "📱 Usuários c/ Telefone", 
+            users_with_phone,
+            f"{phone_percent:.1f}%", 
+            self.styles.colors['primary']
+        ))
+        
+        # Usuários com Email
+        users_with_email = stats['users']['with_email']
+        email_percent = (users_with_email / users_total * 100) if users_total > 0 else 0
+        secondary_cards.append((
+            "📧 Usuários c/ Email", 
+            users_with_email,
+            f"{email_percent:.1f}%", 
+            self.styles.colors['success']
+        ))
         
         # Sensores
         secondary_cards.append((
