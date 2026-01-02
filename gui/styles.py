@@ -10,19 +10,20 @@ class SmartCityStyles:
     
     def __init__(self):
         self.colors = {
-            'primary': '#2C3E50',      # Azul escuro profissional
-            'secondary': '#3498DB',    # Azul claro
-            'accent': '#E74C3C',       # Vermelho para alertas
-            'success': '#27AE60',      # Verde para sucesso
-            'warning': '#F39C12',      # Laranja para avisos
-            'light': '#ECF0F1',        # Cinza claro
-            'dark': '#34495E',         # Cinza escuro
-            'white': '#FFFFFF',        # Branco
-            'background': '#F8F9FA',   # Fundo suave
-            'card': '#FFFFFF',         # Cartões
-            'border': '#BDC3C7',       # Bordas
-            'text_primary': '#2C3E50', # Texto principal
-            'text_secondary': '#7F8C8D' # Texto secundário
+            'primary': '#2E8B57',      # Verde marinho (SeaGreen)
+            'secondary': '#4682B4',    # Azul aço (SteelBlue)
+            'accent': '#DC143C',       # Vermelho carmesim (Crimson)
+            'success': '#228B22',      # Verde floresta (ForestGreen)
+            'warning': '#FF8C00',      # Laranja escuro (DarkOrange)
+            'light': '#F5F5F5',        # Cinza muito claro (WhiteSmoke)
+            'dark': '#2F4F4F',         # Cinza escuro (DarkSlateGray)
+            'white': '#FFFFFF',        # Branco puro
+            'black': '#000000',        # Preto puro
+            'background': '#F0F0F0',  # Cinza claro (LightGray)
+            'card': '#FFFFFF',         # Branco para cards
+            'border': '#D3D3D3',      # Cinza claro (LightGray)
+            'text_primary': '#2F4F4F', # Texto principal
+            'text_secondary': '#696969' # Texto secundário
         }
         
         self.fonts = {
@@ -60,7 +61,7 @@ class SmartCityStyles:
         )
         style.map(
             'Primary.TButton',
-            background=[('active', '#2980B9'), ('pressed', '#21618C')]
+            background=[('active', '#3A9B5F'), ('pressed', '#2F8B57')]
         )
         
         # Estilo para botões de sucesso
@@ -75,7 +76,7 @@ class SmartCityStyles:
         )
         style.map(
             'Success.TButton',
-            background=[('active', '#229954'), ('pressed', '#1E8449')]
+            background=[('active', '#2E9B32'), ('pressed', '#248B27')]
         )
         
         # Estilo para botões de perigo
@@ -90,7 +91,7 @@ class SmartCityStyles:
         )
         style.map(
             'Danger.TButton',
-            background=[('active', '#C0392B'), ('pressed', '#A93226')]
+            background=[('active', '#E62844'), ('pressed', '#C91E35')]
         )
         
         # Estilo para botões secundários

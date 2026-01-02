@@ -6,6 +6,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from functions.conect_db import connect_to_db
 import psycopg as psy
+import psycopg2
+import psycopg2.extras
 from psycopg.rows import dict_row
 from datetime import datetime
 import pandas as pd
@@ -21,7 +23,12 @@ class SmartCityOSGUI:
         self.root = root
         self.root.title("SmartCityOS - Sistema Operacional Inteligente para Cidades")
         self.root.geometry("1400x900")
-        self.root.configure(bg='#F8F9FA')
+        self.root.configure(bg='#F0F0F0')
+        self.root.state('zoomed')
+        
+        # Configurar tema para clam
+        self.style = ttk.Style()
+        self.style.theme_use('clam')
         
         # Inicializar estilos
         self.styles = SmartCityStyles()
@@ -30,10 +37,6 @@ class SmartCityOSGUI:
         # Variáveis de conexão
         self.conn = None
         self.connected = False
-        
-        # Configuração de estilo
-        self.style = ttk.Style()
-        self.style.theme_use('clam')
         
         # Criar interface
         self.create_widgets()
@@ -219,19 +222,28 @@ class SmartCityOSGUI:
             # Usar a mesma lógica da função connect_to_db
             conn_info = self.get_connection_string()
             
-            # Testar conexão
-            with psy.connect(conn_info) as conn:
-                with conn.cursor() as cur:
-                    cur.execute("SELECT version()")
-                    version = cur.fetchone()
+            # Testar conexão e armazenar
+            self.conn = psycopg2.connect(conn_info)
+            
+            # Testar se funciona
+            with self.conn.cursor() as cur:
+                cur.execute("SELECT version()")
+                version = cur.fetchone()
                     
             self.connected = True
             self.connection_status.config(text="🟢 Conectado")
             self.connect_btn.config(text="Desconectar")
             self.status_label.config(text=f"Conectado ao PostgreSQL - {version[0].split(',')[0]}")
             
+        except psycopg2.Error as e:
+            self.connected = False
+            self.conn = None
+            self.connection_status.config(text="🔴 Desconectado")
+            self.connect_btn.config(text="Conectar")
+            self.status_label.config(text=f"Erro de conexão PostgreSQL: {str(e)}")
         except Exception as e:
             self.connected = False
+            self.conn = None
             self.connection_status.config(text="🔴 Desconectado")
             self.connect_btn.config(text="Conectar")
             self.status_label.config(text=f"Erro de conexão: {str(e)}")
@@ -250,7 +262,14 @@ class SmartCityOSGUI:
             
     def toggle_connection(self):
         if self.connected:
+            # Fechar conexão
+            if self.conn:
+                try:
+                    self.conn.close()
+                except:
+                    pass
             self.connected = False
+            self.conn = None
             self.connection_status.config(text="🔴 Desconectado")
             self.connect_btn.config(text="Conectar")
             self.status_label.config(text="Desconectado do banco de dados")
@@ -586,22 +605,791 @@ class SmartCityOSGUI:
                     
         except Exception as e:
             messagebox.showerror("Erro", f"Erro ao carregar veículos: {str(e)}")
-            
+    
     def show_sensors(self):
         self.clear_content()
-        messagebox.showinfo("Em desenvolvimento", "Módulo de Sensores em desenvolvimento!")
         
+        if not self.connected:
+            messagebox.showwarning("Aviso", "Conecte-se ao banco de dados primeiro!")
+            return
+            
+        try:
+            with psy.connect(self.get_connection_string()) as conn:
+                with conn.cursor(row_factory=dict_row) as cur:
+                    cur.execute("""
+                        SELECT s.id, s.type, s.location, s.active, 
+                               COUNT(r.id) as reading_count,
+                               MAX(r.timestamp) as last_reading
+                        FROM sensor s
+                        LEFT JOIN reading r ON s.id = r.sensor_id
+                        GROUP BY s.id, s.type, s.location, s.active
+                        ORDER BY s.type, s.location
+                    """)
+                    sensors = cur.fetchall()
+                    
+                    # Header estilizado
+                    header_frame = tk.Frame(self.content_frame, bg=self.styles.colors['card'])
+                    header_frame.pack(fill=tk.X, padx=20, pady=(20, 10))
+                    
+                    title_label = tk.Label(header_frame, text="📹 Gestão de Sensores", 
+                                          bg=self.styles.colors['card'], fg=self.styles.colors['text_primary'],
+                                          font=self.styles.fonts['title'])
+                    title_label.pack(side=tk.LEFT, padx=20, pady=15)
+                    
+                    # Botões de ação
+                    button_frame = tk.Frame(header_frame, bg=self.styles.colors['card'])
+                    button_frame.pack(side=tk.RIGHT, padx=20, pady=15)
+                    
+                    add_btn = tk.Button(button_frame, text="➕ Adicionar Sensor", command=self.add_sensor_dialog,
+                                      bg=self.styles.colors['success'], fg=self.styles.colors['white'],
+                                      font=self.styles.fonts['button'], relief='flat',
+                                      padx=12, pady=6, cursor='hand2')
+                    add_btn.pack(side=tk.RIGHT, padx=5)
+                    
+                    refresh_btn = tk.Button(button_frame, text="🔄 Atualizar", command=self.show_sensors,
+                                          bg=self.styles.colors['secondary'], fg=self.styles.colors['white'],
+                                          font=self.styles.fonts['button'], relief='flat',
+                                          padx=12, pady=6, cursor='hand2')
+                    refresh_btn.pack(side=tk.RIGHT, padx=5)
+                    
+                    # Tabela de sensores
+                    self.create_sensors_table(sensors)
+                    
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao carregar sensores: {str(e)}")
+            
+    def create_sensors_table(self, sensors):
+        # Frame da tabela
+        table_frame = tk.Frame(self.content_frame, bg=self.styles.colors['card'])
+        table_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+        
+        # Treeview para sensores
+        columns = ('ID', 'Tipo', 'Localização', 'Status', 'Leituras', 'Última Leitura')
+        self.sensors_tree = ttk.Treeview(table_frame, columns=columns, show='headings', style='Results.Treeview')
+        
+        # Configurar colunas
+        for col in columns:
+            self.sensors_tree.heading(col, text=col)
+            if col == 'ID':
+                self.sensors_tree.column(col, width=60, minwidth=50)
+            elif col == 'Status':
+                self.sensors_tree.column(col, width=80, minwidth=70)
+            elif col == 'Leituras':
+                self.sensors_tree.column(col, width=80, minwidth=70)
+            else:
+                self.sensors_tree.column(col, width=150, minwidth=100)
+        
+        # Scrollbars
+        v_scrollbar = ttk.Scrollbar(table_frame, orient=tk.VERTICAL, command=self.sensors_tree.yview)
+        h_scrollbar = ttk.Scrollbar(table_frame, orient=tk.HORIZONTAL, command=self.sensors_tree.xview)
+        self.sensors_tree.configure(yscrollcommand=v_scrollbar.set, xscrollcommand=h_scrollbar.set)
+        
+        # Grid
+        self.sensors_tree.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        v_scrollbar.grid(row=0, column=1, sticky=(tk.N, tk.S))
+        h_scrollbar.grid(row=1, column=0, sticky=(tk.W, tk.E))
+        
+        table_frame.columnconfigure(0, weight=1)
+        table_frame.rowconfigure(0, weight=1)
+        
+        # Inserir dados
+        for i, sensor in enumerate(sensors):
+            status = "🟢 Ativo" if sensor['active'] else "🔴 Inativo"
+            last_reading = sensor['last_reading'].strftime('%d/%m %H:%M') if sensor['last_reading'] else "N/A"
+            
+            tag = 'Results.Treeview.Even' if i % 2 == 0 else 'Results.Treeview.Odd'
+            self.sensors_tree.insert('', tk.END, values=(
+                sensor['id'],
+                sensor['type'],
+                sensor['location'],
+                status,
+                sensor['reading_count'],
+                last_reading
+            ), tags=(tag,))
+            
+        # Informações
+        info_frame = tk.Frame(self.content_frame, bg=self.styles.colors['background'])
+        info_frame.pack(fill=tk.X, padx=20, pady=(0, 20))
+        
+        info_label = tk.Label(info_frame, text=f"📊 {len(sensors)} sensores cadastrados",
+                            bg=self.styles.colors['background'], fg=self.styles.colors['text_secondary'],
+                            font=self.styles.fonts['small'])
+        info_label.pack(side=tk.LEFT)
+       
     def show_incidents(self):
         self.clear_content()
-        messagebox.showinfo("Em desenvolvimento", "Módulo de Incidentes em desenvolvimento!")
+        
+        if not self.connected:
+            messagebox.showwarning("Aviso", "Conecte-se ao banco de dados primeiro!")
+            return
+            
+        try:
+            with psy.connect(self.get_connection_string()) as conn:
+                with conn.cursor(row_factory=dict_row) as cur:
+                    cur.execute("""
+                        SELECT ti.id, ti.location, ti.occurred_at, ti.description,
+                               COUNT(f.id) as fine_count,
+                               COALESCE(SUM(f.amount), 0) as total_fines
+                        FROM traffic_incident ti
+                        LEFT JOIN fine f ON ti.id = f.traffic_incident_id
+                        GROUP BY ti.id, ti.location, ti.occurred_at, ti.description
+                        ORDER BY ti.occurred_at DESC
+                    """)
+                    incidents = cur.fetchall()
+                    
+                    # Header estilizado
+                    header_frame = tk.Frame(self.content_frame, bg=self.styles.colors['card'])
+                    header_frame.pack(fill=tk.X, padx=20, pady=(20, 10))
+                    
+                    title_label = tk.Label(header_frame, text="⚠️ Gestão de Incidentes", 
+                                          bg=self.styles.colors['card'], fg=self.styles.colors['text_primary'],
+                                          font=self.styles.fonts['title'])
+                    title_label.pack(side=tk.LEFT, padx=20, pady=15)
+                    
+                    # Botões de ação
+                    button_frame = tk.Frame(header_frame, bg=self.styles.colors['card'])
+                    button_frame.pack(side=tk.RIGHT, padx=20, pady=15)
+                    
+                    add_btn = tk.Button(button_frame, text="➕ Registrar Incidente", command=self.add_incident_dialog,
+                                      bg=self.styles.colors['warning'], fg=self.styles.colors['white'],
+                                      font=self.styles.fonts['button'], relief='flat',
+                                      padx=12, pady=6, cursor='hand2')
+                    add_btn.pack(side=tk.RIGHT, padx=5)
+                    
+                    refresh_btn = tk.Button(button_frame, text="🔄 Atualizar", command=self.show_incidents,
+                                          bg=self.styles.colors['secondary'], fg=self.styles.colors['white'],
+                                          font=self.styles.fonts['button'], relief='flat',
+                                          padx=12, pady=6, cursor='hand2')
+                    refresh_btn.pack(side=tk.RIGHT, padx=5)
+                    
+                    # Tabela de incidentes
+                    self.create_incidents_table(incidents)
+                    
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao carregar incidentes: {str(e)}")
+            
+    def create_incidents_table(self, incidents):
+        # Frame da tabela
+        table_frame = tk.Frame(self.content_frame, bg=self.styles.colors['card'])
+        table_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+        
+        # Treeview para incidentes
+        columns = ('ID', 'Localização', 'Data/Hora', 'Descrição', 'Multas', 'Valor Total')
+        self.incidents_tree = ttk.Treeview(table_frame, columns=columns, show='headings', style='Results.Treeview')
+        
+        # Configurar colunas
+        for col in columns:
+            self.incidents_tree.heading(col, text=col)
+            if col == 'ID':
+                self.incidents_tree.column(col, width=60, minwidth=50)
+            elif col == 'Multas':
+                self.incidents_tree.column(col, width=60, minwidth=50)
+            elif col == 'Valor Total':
+                self.incidents_tree.column(col, width=100, minwidth=80)
+            else:
+                self.incidents_tree.column(col, width=150, minwidth=100)
+        
+        # Scrollbars
+        v_scrollbar = ttk.Scrollbar(table_frame, orient=tk.VERTICAL, command=self.incidents_tree.yview)
+        h_scrollbar = ttk.Scrollbar(table_frame, orient=tk.HORIZONTAL, command=self.incidents_tree.xview)
+        self.incidents_tree.configure(yscrollcommand=v_scrollbar.set, xscrollcommand=h_scrollbar.set)
+        
+        # Grid
+        self.incidents_tree.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        v_scrollbar.grid(row=0, column=1, sticky=(tk.N, tk.S))
+        h_scrollbar.grid(row=1, column=0, sticky=(tk.W, tk.E))
+        
+        table_frame.columnconfigure(0, weight=1)
+        table_frame.rowconfigure(0, weight=1)
+        
+        # Inserir dados
+        for i, incident in enumerate(incidents):
+            try:
+                occurred_at = incident['occurred_at'].strftime('%d/%m %H:%M') if incident['occurred_at'] else "N/A"
+                description = incident['description'] or "Sem descrição"
+                if len(description) > 50:
+                    description = description[:47] + "..."
+                
+                tag = 'Results.Treeview.Even' if i % 2 == 0 else 'Results.Treeview.Odd'
+                self.incidents_tree.insert('', tk.END, values=(
+                    incident['id'],
+                    incident['location'] or "N/A",
+                    occurred_at,
+                    description,
+                    incident['fine_count'] or 0,
+                    f"R$ {incident['total_fines']:.2f}" if incident['total_fines'] and incident['total_fines'] > 0 else "R$ 0,00"
+                ), tags=(tag,))
+            except Exception as e:
+                print(f"Erro ao processar incidente {i}: {e}")
+                continue
+            
+        # Informações
+        info_frame = tk.Frame(self.content_frame, bg=self.styles.colors['background'])
+        info_frame.pack(fill=tk.X, padx=20, pady=(0, 20))
+        
+        info_label = tk.Label(info_frame, text=f"⚠️ {len(incidents)} incidentes registrados",
+                            bg=self.styles.colors['background'], fg=self.styles.colors['text_secondary'],
+                            font=self.styles.fonts['small'])
+        info_label.pack(side=tk.LEFT)
         
     def show_fines(self):
         self.clear_content()
-        messagebox.showinfo("Em desenvolvimento", "Módulo de Multas em desenvolvimento!")
+        
+        if not self.connected:
+            messagebox.showwarning("Aviso", "Conecte-se ao banco de dados primeiro!")
+            return
+            
+        try:
+            with psy.connect(self.get_connection_string()) as conn:
+                with conn.cursor(row_factory=dict_row) as cur:
+                    # Query simplificada para testar
+                    cur.execute("""
+                        SELECT f.id, f.amount, f.status, f.created_at, f.due_date,
+                               ti.location as incident_location, ti.description as incident_description,
+                               v.license_plate
+                        FROM fine f
+                        LEFT JOIN traffic_incident ti ON f.traffic_incident_id = ti.id
+                        LEFT JOIN vehicle v ON ti.vehicle_id = v.id
+                        ORDER BY f.created_at DESC
+                    """)
+                    fines = cur.fetchall()
+                    
+                    # Se não houver dados, mostrar mensagem
+                    if not fines:
+                        self.clear_content()
+                        msg_frame = tk.Frame(self.content_frame, bg=self.styles.colors['card'])
+                        msg_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+                        
+                        msg_label = tk.Label(msg_frame, text="💰 Nenhuma multa encontrada no sistema",
+                                          bg=self.styles.colors['card'], fg=self.styles.colors['text_secondary'],
+                                          font=self.styles.fonts['normal'])
+                        msg_label.pack(pady=50)
+                        return
+                    
+                    # Header estilizado
+                    header_frame = tk.Frame(self.content_frame, bg=self.styles.colors['card'])
+                    header_frame.pack(fill=tk.X, padx=20, pady=(20, 10))
+                    
+                    title_label = tk.Label(header_frame, text="💰 Gestão de Multas", 
+                                          bg=self.styles.colors['card'], fg=self.styles.colors['text_primary'],
+                                          font=self.styles.fonts['title'])
+                    title_label.pack(side=tk.LEFT, padx=20, pady=15)
+                    
+                    # Botões de ação
+                    button_frame = tk.Frame(header_frame, bg=self.styles.colors['card'])
+                    button_frame.pack(side=tk.RIGHT, padx=20, pady=15)
+                    
+                    pay_btn = tk.Button(button_frame, text="💳 Pagar Multa", command=self.pay_fine_dialog,
+                                      bg=self.styles.colors['success'], fg=self.styles.colors['white'],
+                                      font=self.styles.fonts['button'], relief='flat',
+                                      padx=12, pady=6, cursor='hand2')
+                    pay_btn.pack(side=tk.RIGHT, padx=5)
+                    
+                    refresh_btn = tk.Button(button_frame, text="🔄 Atualizar", command=self.show_fines,
+                                          bg=self.styles.colors['secondary'], fg=self.styles.colors['white'],
+                                          font=self.styles.fonts['button'], relief='flat',
+                                          padx=12, pady=6, cursor='hand2')
+                    refresh_btn.pack(side=tk.RIGHT, padx=5)
+                    
+                    # Cards de estatísticas
+                    self.create_fines_stats(fines)
+                    
+                    # Tabela de multas
+                    self.create_fines_table(fines)
+                    
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao carregar multas: {str(e)}")
+            
+    def create_fines_stats(self, fines):
+        # Calcular estatísticas
+        total_fines = len(fines)
+        pending_fines = len([f for f in fines if f['status'] == 'pending'])
+        paid_fines = len([f for f in fines if f['status'] == 'paid'])
+        total_amount = sum(f['amount'] for f in fines if f['amount'])
+        pending_amount = sum(f['amount'] for f in fines if f['status'] == 'pending' and f['amount'])
+        
+        # Frame de estatísticas
+        stats_frame = tk.Frame(self.content_frame, bg=self.styles.colors['background'])
+        stats_frame.pack(fill=tk.X, padx=20, pady=(0, 10))
+        
+        # Cards
+        cards_data = [
+            ("💰 Total Multas", total_fines, f"R$ {total_amount:,.2f}", self.styles.colors['primary']),
+            ("🔴 Pendentes", pending_fines, f"R$ {pending_amount:,.2f}", self.styles.colors['warning']),
+            ("✅ Pagas", paid_fines, f"{(paid_fines/total_fines*100):.1f}%" if total_fines > 0 else "0%", self.styles.colors['success'])
+        ]
+        
+        for i, (title, value, extra, color) in enumerate(cards_data):
+            card = self.create_fines_stat_card(stats_frame, title, value, extra, color)
+            card.pack(side=tk.LEFT, padx=10, fill=tk.BOTH, expand=True)
+            
+    def create_fines_stat_card(self, parent, title, value, extra, color):
+        card = tk.Frame(parent, bg=self.styles.colors['card'], relief='solid', bd=1)
+        
+        # Header
+        header = tk.Frame(card, bg=color, height=40)
+        header.pack(fill=tk.X)
+        header.grid_propagate(False)
+        
+        title_label = tk.Label(header, text=title, bg=color, fg=self.styles.colors['white'],
+                              font=self.styles.fonts['normal'])
+        title_label.pack(pady=8)
+        
+        # Content
+        content = tk.Frame(card, bg=self.styles.colors['card'])
+        content.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        value_label = tk.Label(content, text=str(value), bg=self.styles.colors['card'],
+                              fg=color, font=('Segoe UI', 24, 'bold'))
+        value_label.pack(anchor='w')
+        
+        extra_label = tk.Label(content, text=extra, bg=self.styles.colors['card'],
+                               fg=self.styles.colors['text_secondary'], font=self.styles.fonts['small'])
+        extra_label.pack(anchor='w', pady=(2, 0))
+        
+        return card
+        
+    def create_fines_table(self, fines):
+        # Frame da tabela
+        table_frame = tk.Frame(self.content_frame, bg=self.styles.colors['card'])
+        table_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+        
+        # Treeview para multas
+        columns = ('ID', 'Valor', 'Status', 'Data', 'Vencimento', 'Local', 'Descrição', 'Placa')
+        self.fines_tree = ttk.Treeview(table_frame, columns=columns, show='headings', style='Results.Treeview')
+        
+        # Configurar colunas
+        col_widths = {
+            'ID': 50, 'Valor': 80, 'Status': 80, 'Data': 80, 'Vencimento': 80,
+            'Local': 100, 'Descrição': 120, 'Placa': 80
+        }
+        
+        for col in columns:
+            self.fines_tree.heading(col, text=col)
+            self.fines_tree.column(col, width=col_widths.get(col, 100), minwidth=60)
+        
+        # Scrollbars
+        v_scrollbar = ttk.Scrollbar(table_frame, orient=tk.VERTICAL, command=self.fines_tree.yview)
+        h_scrollbar = ttk.Scrollbar(table_frame, orient=tk.HORIZONTAL, command=self.fines_tree.xview)
+        self.fines_tree.configure(yscrollcommand=v_scrollbar.set, xscrollcommand=h_scrollbar.set)
+        
+        # Grid
+        self.fines_tree.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        v_scrollbar.grid(row=0, column=1, sticky=(tk.N, tk.S))
+        h_scrollbar.grid(row=1, column=0, sticky=(tk.W, tk.E))
+        
+        table_frame.columnconfigure(0, weight=1)
+        table_frame.rowconfigure(0, weight=1)
+        
+        # Inserir dados
+        for i, fine in enumerate(fines):
+            try:
+                status_icon = "🔴" if fine['status'] == 'pending' else "✅"
+                status_text = f"{status_icon} {'Pendente' if fine['status'] == 'pending' else 'Paga'}"
+                created_at = fine['created_at'].strftime('%d/%m/%Y') if fine['created_at'] else "N/A"
+                due_date = fine['due_date'].strftime('%d/%m/%Y') if fine['due_date'] else "N/A"
+                incident_location = fine['incident_location'] or "N/A"
+                incident_description = fine['incident_description'] or "Sem descrição"
+                if len(incident_description) > 30:
+                    incident_description = incident_description[:27] + "..."
+                
+                tag = 'Results.Treeview.Even' if i % 2 == 0 else 'Results.Treeview.Odd'
+                self.fines_tree.insert('', tk.END, values=(
+                    fine['id'],
+                    f"R$ {fine['amount']:.2f}" if fine['amount'] and fine['amount'] > 0 else "R$ 0,00",
+                    status_text,
+                    created_at,
+                    due_date,
+                    incident_location,
+                    incident_description,
+                    fine['license_plate'] or "N/A"
+                ), tags=(tag,))
+            except Exception as e:
+                print(f"Erro ao processar multa {i}: {e}")
+                continue
+            
+        # Informações
+        info_frame = tk.Frame(self.content_frame, bg=self.styles.colors['background'])
+        info_frame.pack(fill=tk.X, padx=20, pady=(0, 20))
+        
+        info_label = tk.Label(info_frame, text=f"💰 {len(fines)} multas cadastradas",
+                            bg=self.styles.colors['background'], fg=self.styles.colors['text_secondary'],
+                            font=self.styles.fonts['small'])
+        info_label.pack(side=tk.LEFT)
         
     def show_statistics(self):
         self.clear_content()
-        messagebox.showinfo("Em desenvolvimento", "Módulo de Estatísticas em desenvolvimento!")
+        
+        if not self.connected:
+            messagebox.showwarning("Aviso", "Conecte-se ao banco de dados primeiro!")
+            return
+            
+        try:
+            with psy.connect(self.get_connection_string()) as conn:
+                with conn.cursor(row_factory=dict_row) as cur:
+                    # Header estilizado
+                    header_frame = tk.Frame(self.content_frame, bg=self.styles.colors['card'])
+                    header_frame.pack(fill=tk.X, padx=20, pady=(20, 10))
+                    
+                    title_label = tk.Label(header_frame, text="📈 Estatísticas do Sistema", 
+                                          bg=self.styles.colors['card'], fg=self.styles.colors['text_primary'],
+                                          font=self.styles.fonts['title'])
+                    title_label.pack(side=tk.LEFT, padx=20, pady=15)
+                    
+                    # Botões de ação
+                    button_frame = tk.Frame(header_frame, bg=self.styles.colors['card'])
+                    button_frame.pack(side=tk.RIGHT, padx=20, pady=15)
+                    
+                    export_btn = tk.Button(button_frame, text="📥 Exportar Relatório", command=self.export_statistics,
+                                         bg=self.styles.colors['secondary'], fg=self.styles.colors['white'],
+                                         font=self.styles.fonts['button'], relief='flat',
+                                         padx=12, pady=6, cursor='hand2')
+                    export_btn.pack(side=tk.RIGHT, padx=5)
+                    
+                    refresh_btn = tk.Button(button_frame, text="🔄 Atualizar", command=self.show_statistics,
+                                          bg=self.styles.colors['primary'], fg=self.styles.colors['white'],
+                                          font=self.styles.fonts['button'], relief='flat',
+                                          padx=12, pady=6, cursor='hand2')
+                    refresh_btn.pack(side=tk.RIGHT, padx=5)
+                    
+                    # Carregar estatísticas
+                    stats = self.load_comprehensive_statistics(cur)
+                    
+                    # Exibir estatísticas
+                    self.display_comprehensive_statistics(stats)
+                    
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao carregar estatísticas: {str(e)}")
+            
+    def load_comprehensive_statistics(self, cur):
+        stats = {}
+        
+        try:
+            # Estatísticas de Cidadãos
+            cur.execute("""
+                SELECT COUNT(*) as total, 
+                       COUNT(CASE WHEN debt > 0 THEN 1 END) as with_debt,
+                       COUNT(CASE WHEN allowed = TRUE THEN 1 END) as with_access,
+                       COALESCE(SUM(debt), 0) as total_debt,
+                       COALESCE(AVG(debt), 0) as avg_debt
+                FROM citizen
+            """)
+            stats['citizens'] = cur.fetchone()
+        except Exception as e:
+            print(f"Erro ao carregar estatísticas de cidadãos: {e}")
+            stats['citizens'] = {'total': 0, 'with_debt': 0, 'with_access': 0, 'total_debt': 0, 'avg_debt': 0}
+        
+        try:
+            # Estatísticas de Veículos
+            cur.execute("""
+                SELECT COUNT(*) as total,
+                       COUNT(CASE WHEN allowed = TRUE THEN 1 END) as active,
+                       COUNT(CASE WHEN allowed = FALSE THEN 1 END) as blocked,
+                       COUNT(DISTINCT citizen_id) as unique_owners
+                FROM vehicle
+            """)
+            stats['vehicles'] = cur.fetchone()
+        except Exception as e:
+            print(f"Erro ao carregar estatísticas de veículos: {e}")
+            stats['vehicles'] = {'total': 0, 'active': 0, 'blocked': 0, 'unique_owners': 0}
+        
+        try:
+            # Estatísticas de Sensores
+            cur.execute("""
+                SELECT type, COUNT(*) as count, 
+                       COUNT(CASE WHEN active = TRUE THEN 1 END) as active
+                FROM sensor
+                GROUP BY type
+                ORDER BY count DESC
+            """)
+            stats['sensors_by_type'] = cur.fetchall()
+            
+            cur.execute("""
+                SELECT COUNT(*) as total_sensors,
+                       COUNT(CASE WHEN active = TRUE THEN 1 END) as active_sensors,
+                       COUNT(DISTINCT type) as sensor_types
+                FROM sensor
+            """)
+            stats['sensors'] = cur.fetchone()
+        except Exception as e:
+            print(f"Erro ao carregar estatísticas de sensores: {e}")
+            stats['sensors_by_type'] = []
+            stats['sensors'] = {'total_sensors': 0, 'active_sensors': 0, 'sensor_types': 0}
+        
+        try:
+            # Estatísticas de Incidentes
+            cur.execute("""
+                SELECT COUNT(*) as count,
+                       COUNT(CASE WHEN ti.occurred_at >= CURRENT_DATE - INTERVAL '30 days' THEN 1 END) as last_30_days,
+                       COUNT(CASE WHEN ti.occurred_at >= CURRENT_DATE - INTERVAL '7 days' THEN 1 END) as last_7_days,
+                       COALESCE(SUM(f.amount), 0) as total_fines
+                FROM traffic_incident ti
+                LEFT JOIN fine f ON ti.id = f.traffic_incident_id
+            """)
+            incident_summary = cur.fetchone()
+            
+            # Incidentes por localização
+            cur.execute("""
+                SELECT ti.location, COUNT(*) as count,
+                       COUNT(f.id) as fine_count,
+                       COALESCE(AVG(f.amount), 0) as avg_fine
+                FROM traffic_incident ti
+                LEFT JOIN fine f ON ti.id = f.traffic_incident_id
+                GROUP BY ti.location
+                ORDER BY count DESC
+            """)
+            stats['incidents_by_type'] = cur.fetchall()
+            
+            stats['incidents'] = {
+                'total_incidents': incident_summary['count'],
+                'resolved': 0,  # Não temos campo resolved
+                'pending': incident_summary['count'],  # Todos são pendentes por padrão
+                'last_30_days': incident_summary['last_30_days'],
+                'last_7_days': incident_summary['last_7_days'],
+                'total_fines': incident_summary['total_fines']
+            }
+        except Exception as e:
+            print(f"Erro ao carregar estatísticas de incidentes: {e}")
+            stats['incidents_by_type'] = []
+            stats['incidents'] = {'total_incidents': 0, 'resolved': 0, 'pending': 0, 'last_30_days': 0, 'last_7_days': 0, 'total_fines': 0}
+        
+        try:
+            # Estatísticas de Multas
+            cur.execute("""
+                SELECT status, COUNT(*) as count, COALESCE(SUM(amount), 0) as total_amount
+                FROM fine
+                GROUP BY status
+            """)
+            stats['fines_by_status'] = cur.fetchall()
+            
+            cur.execute("""
+                SELECT COUNT(*) as total_fines,
+                       COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending_fines,
+                       COUNT(CASE WHEN status = 'paid' THEN 1 END) as paid_fines,
+                       COUNT(CASE WHEN status = 'cancelled' THEN 1 END) as cancelled_fines,
+                       COALESCE(SUM(amount), 0) as total_amount,
+                       COALESCE(SUM(CASE WHEN status = 'pending' THEN amount END), 0) as pending_amount,
+                       COALESCE(SUM(CASE WHEN status = 'paid' THEN amount END), 0) as paid_amount,
+                       COALESCE(AVG(amount), 0) as avg_amount
+                FROM fine
+            """)
+            stats['fines'] = cur.fetchone()
+        except Exception as e:
+            print(f"Erro ao carregar estatísticas de multas: {e}")
+            stats['fines_by_status'] = []
+            stats['fines'] = {'total_fines': 0, 'pending_fines': 0, 'paid_fines': 0, 'cancelled_fines': 0, 'total_amount': 0, 'pending_amount': 0, 'paid_amount': 0, 'avg_amount': 0}
+        
+        try:
+            # Estatísticas de Leituras (últimos 7 dias)
+            cur.execute("""
+                SELECT DATE(timestamp) as date, COUNT(*) as readings_count
+                FROM reading
+                WHERE timestamp >= CURRENT_DATE - INTERVAL '7 days'
+                GROUP BY DATE(timestamp)
+                ORDER BY date
+            """)
+            stats['readings_last_7_days'] = cur.fetchall()
+        except Exception as e:
+            print(f"Erro ao carregar estatísticas de leituras: {e}")
+            stats['readings_last_7_days'] = []
+        
+        return stats
+        
+    def display_comprehensive_statistics(self, stats):
+        # Container principal
+        main_container = tk.Frame(self.content_frame, bg=self.styles.colors['background'])
+        main_container.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+        
+        # Seção 1: Cards Principais
+        self.create_main_stats_cards(main_container, stats)
+        
+        # Seção 2: Gráficos e Tabelas
+        stats_frame = tk.Frame(main_container, bg=self.styles.colors['background'])
+        stats_frame.pack(fill=tk.BOTH, expand=True, pady=(20, 0))
+        
+        # Coluna esquerda - Tabelas detalhadas
+        left_frame = tk.Frame(stats_frame, bg=self.styles.colors['background'])
+        left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
+        
+        # Coluna direita - Cards secundários
+        right_frame = tk.Frame(stats_frame, bg=self.styles.colors['background'])
+        right_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(10, 0))
+        
+        # Tabelas detalhadas
+        self.create_detailed_tables(left_frame, stats)
+        
+        # Cards secundários
+        self.create_secondary_stats_cards(right_frame, stats)
+        
+    def create_main_stats_cards(self, parent, stats):
+        # Frame para cards principais
+        cards_frame = tk.Frame(parent, bg=self.styles.colors['background'])
+        cards_frame.pack(fill=tk.X, pady=(0, 20))
+        
+        # Cards principais
+        main_cards = [
+            ("👥 Cidadãos", stats['citizens']['total'], 
+             f"R$ {stats['citizens']['total_debt']:,.2f}", self.styles.colors['primary']),
+            ("🚗 Veículos", stats['vehicles']['total'],
+             f"{stats['vehicles']['active']} ativos", self.styles.colors['success']),
+            ("⚠️ Incidentes", stats['incidents']['total_incidents'],
+             f"{stats['incidents']['last_7_days']} esta semana", self.styles.colors['warning']),
+            ("💰 Multas", stats['fines']['total_fines'],
+             f"R$ {stats['fines']['total_amount']:,.2f}", self.styles.colors['accent'])
+        ]
+        
+        for i, (title, value, extra, color) in enumerate(main_cards):
+            card = self.create_stats_card(cards_frame, title, value, extra, color, large=True)
+            card.pack(side=tk.LEFT, padx=10, fill=tk.BOTH, expand=True)
+            
+    def create_secondary_stats_cards(self, parent, stats):
+        # Cards secundários com tratamento de divisão por zero
+        secondary_cards = []
+        
+        # Sensores
+        secondary_cards.append((
+            "📹 Sensores", 
+            stats['sensors']['total_sensors'],
+            f"{stats['sensors']['active_sensors']} ativos", 
+            self.styles.colors['secondary']
+        ))
+        
+        # Veículos Bloqueados
+        vehicles_total = stats['vehicles']['total']
+        vehicles_blocked = stats['vehicles']['blocked']
+        blocked_percent = (vehicles_blocked / vehicles_total * 100) if vehicles_total > 0 else 0
+        secondary_cards.append((
+            "🔒 Veículos Bloqueados", 
+            vehicles_blocked,
+            f"{blocked_percent:.1f}%", 
+            self.styles.colors['warning']
+        ))
+        
+        # Multas Pendentes
+        secondary_cards.append((
+            "💳 Multas Pendentes", 
+            stats['fines']['pending_fines'],
+            f"R$ {stats['fines']['pending_amount']:,.2f}", 
+            self.styles.colors['accent']
+        ))
+        
+        # Incidentes Resolvidos
+        incidents_total = stats['incidents']['total_incidents']
+        incidents_resolved = stats['incidents']['resolved']
+        resolved_percent = (incidents_resolved / incidents_total * 100) if incidents_total > 0 else 0
+        secondary_cards.append((
+            "✅ Incidentes Resolvidos", 
+            incidents_resolved,
+            f"{resolved_percent:.1f}%", 
+            self.styles.colors['success']
+        ))
+        
+        for title, value, extra, color in secondary_cards:
+            card = self.create_stats_card(parent, title, value, extra, color, large=False)
+            card.pack(fill=tk.X, pady=5)
+            
+    def create_stats_card(self, parent, title, value, extra, color, large=True):
+        card = tk.Frame(parent, bg=self.styles.colors['card'], relief='solid', bd=1)
+        
+        # Header
+        header_height = 60 if large else 40
+        header = tk.Frame(card, bg=color, height=header_height)
+        header.pack(fill=tk.X)
+        header.grid_propagate(False)
+        
+        font_size = 14 if large else 11
+        title_label = tk.Label(header, text=title, bg=color, fg=self.styles.colors['white'],
+                              font=('Segoe UI', font_size))
+        title_label.pack(pady=15 if large else 10)
+        
+        # Content
+        content = tk.Frame(card, bg=self.styles.colors['card'])
+        content.pack(fill=tk.BOTH, expand=True, padx=15, pady=15)
+        
+        font_size_value = 32 if large else 20
+        value_label = tk.Label(content, text=str(value), bg=self.styles.colors['card'],
+                              fg=color, font=('Segoe UI', font_size_value, 'bold'))
+        value_label.pack(anchor='w')
+        
+        extra_label = tk.Label(content, text=extra, bg=self.styles.colors['card'],
+                               fg=self.styles.colors['text_secondary'], font=self.styles.fonts['normal'])
+        extra_label.pack(anchor='w', pady=(5, 0))
+        
+        return card
+        
+    def create_detailed_tables(self, parent, stats):
+        # Tabela de Sensores por Tipo
+        self.create_type_table(parent, "📹 Sensores por Tipo", stats['sensors_by_type'], 
+                              ['Tipo', 'Total', 'Ativos'])
+        
+        # Tabela de Incidentes por Tipo
+        self.create_type_table(parent, "⚠️ Incidentes por Localização", stats['incidents_by_type'],
+                              ['Localização', 'Total', 'Multas', 'Multa Média'])
+        
+        # Tabela de Multas por Status
+        self.create_type_table(parent, "💰 Multas por Status", stats['fines_by_status'],
+                              ['Status', 'Quantidade', 'Valor Total'])
+                              
+    def create_type_table(self, parent, title, data, columns):
+        # Frame da tabela
+        table_frame = tk.LabelFrame(parent, text=title, bg=self.styles.colors['card'],
+                                  fg=self.styles.colors['text_primary'], font=self.styles.fonts['heading'],
+                                  relief='solid', bd=1)
+        table_frame.pack(fill=tk.X, pady=10)
+        
+        # Treeview
+        tree = ttk.Treeview(table_frame, columns=columns, show='headings', height=4, style='Results.Treeview')
+        
+        # Configurar colunas
+        for col in columns:
+            tree.heading(col, text=col)
+            tree.column(col, width=100, minwidth=80)
+        
+        # Scrollbar
+        scrollbar = ttk.Scrollbar(table_frame, orient=tk.VERTICAL, command=tree.yview)
+        tree.configure(yscrollcommand=scrollbar.set)
+        
+        # Grid
+        tree.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        scrollbar.grid(row=0, column=1, sticky=(tk.N, tk.S))
+        
+        table_frame.columnconfigure(0, weight=1)
+        table_frame.rowconfigure(0, weight=1)
+        
+        # Inserir dados
+        for i, row in enumerate(data):
+            try:
+                values = []
+                if title == "📹 Sensores por Tipo":
+                    values = [row['type'] or "N/A", row['count'] or 0, row['active'] or 0]
+                elif title == "⚠️ Incidentes por Localização":
+                    avg_fine = row['avg_fine'] if row['avg_fine'] and row['avg_fine'] > 0 else 0
+                    values = [
+                        row['location'] or "N/A", 
+                        row['count'] or 0, 
+                        row['fine_count'] or 0, 
+                        f"R$ {avg_fine:.2f}"
+                    ]
+                elif title == "💰 Multas por Status":
+                    total_amount = row['total_amount'] if row['total_amount'] and row['total_amount'] > 0 else 0
+                    values = [
+                        row['status'] or "N/A", 
+                        row['count'] or 0, 
+                        f"R$ {total_amount:.2f}"
+                    ]
+                
+                tag = 'Results.Treeview.Even' if i % 2 == 0 else 'Results.Treeview.Odd'
+                tree.insert('', tk.END, values=values, tags=(tag,))
+            except Exception as e:
+                print(f"Erro ao processar linha {i} na tabela {title}: {e}")
+                continue
+            
+        # Pack
+        table_frame.pack(fill=tk.X, padx=10, pady=5)
+        
+    def export_statistics(self):
+        """Exporta estatísticas para CSV"""
+        messagebox.showinfo("Em desenvolvimento", "Funcionalidade de exportação em desenvolvimento!")
         
     def show_sql_console(self):
         self.clear_content()
@@ -645,48 +1433,75 @@ class SmartCityOSGUI:
                                   relief='solid', bd=1)
         sql_frame.pack(fill=tk.BOTH, expand=True)
         
-        # Área de texto para SQL com estilo melhorado
-        sql_container = tk.Frame(sql_frame, bg=self.styles.colors['card'])
-        sql_container.pack(fill=tk.BOTH, expand=True, padx=15, pady=15)
-        
+        # Área de texto para SQL - CONFIGURAÇÃO MÍNIMA
         self.sql_text = scrolledtext.ScrolledText(
-            sql_container, 
+            sql_frame, 
             height=12, 
             width=60,
-            bg='#2E3440',  # Fundo escuro tipo VS Code
-            fg='#D8DEE9',  # Texto claro
+            bg='#2E3440',
+            fg='#D8DEE9',
             font=('Consolas', 11),
-            insertbackground='#88C0D0',  # Cursor
-            selectbackground='#4C566A',  # Seleção
+            insertbackground='#88C0D0',
+            selectbackground='#4C566A',
             relief='flat',
-            bd=1,
-            state='normal',  # Garantir que está editável
-            wrap='word',  # Quebra de linha automática
-            undo=True,  # Habilitar desfazer/refazer
-            padx=5,
-            pady=5
+            bd=0,
+            wrap='word',
+            padx=8,
+            pady=8
         )
-        self.sql_text.pack(fill=tk.BOTH, expand=True)
+        self.sql_text.pack(fill=tk.BOTH, expand=True, padx=15, pady=15)
         
         # Inserir texto inicial
         self.sql_text.insert(tk.END, "-- Digite sua consulta SQL aqui\n")
         self.sql_text.insert(tk.END, "SELECT * FROM app_user LIMIT 10;")
         self.sql_text.tag_add("comment", "1.0", "1.end")
-        self.sql_text.tag_config("comment", foreground='#616E88')  # Comentários em cinza
+        self.sql_text.tag_config("comment", foreground='#616E88')
         
-        # Garantir que o widget está focado e editável
-        self.sql_text.config(state='normal')
+        # FORÇAR FOCO IMEDIATO APÓS CRIAR O WIDGET
         self.sql_text.focus_set()
-        
-        # Limpar seleção inicial
-        self.sql_text.tag_remove('sel', '1.0', 'end')
         self.sql_text.mark_set('insert', 'end')
         
-        # Adicionar evento de clique para garantir foco
+        # EVENTOS SIMPLES
+        self.sql_text.bind('<FocusIn>', lambda e: None)
         self.sql_text.bind('<Button-1>', lambda e: self.sql_text.focus_set())
         
-        # Adicionar evento de foco para garantir estado editável
-        self.sql_text.bind('<FocusIn>', lambda e: self.sql_text.config(state='normal'))
+        # SIMULAR CLIQUE AUTOMÁTICO AO ABRIR ABA
+        def simulate_click():
+            # Simular um clique no editor SQL para forçar foco
+            try:
+                self.sql_text.event_generate('<Button-1>', x=1, y=1)
+                self.sql_text.focus_set()
+                self.sql_text.mark_set('insert', 'end')
+            except:
+                pass
+        
+        # CRIAR BOTÃO INVISÍVEL PARA "ATIVAR" A DIGITAÇÃO
+        self.focus_activator = tk.Button(self.root, text="", command=lambda: None, width=0, height=0)
+        
+        def activate_focus():
+            # Simular clique no botão invisível e depois no editor
+            try:
+                self.focus_activator.invoke()
+                self.root.after(10, simulate_click)
+            except: 
+                pass
+        
+        # FORÇAR FOCO QUANDO A ABA FOR SELECIONADA
+        def on_tab_selected(event):
+            # Verificar se estamos na aba de SQL
+            try:
+                current_tab = self.notebook.select()
+                tab_text = self.notebook.tab(current_tab, "text")
+                if "SQL" in tab_text:
+                    # Ativar foco com simulação de botão
+                    self.root.after(100, activate_focus)
+            except:
+                pass
+        
+        self.notebook.bind('<<NotebookTabChanged>>', on_tab_selected)
+        
+        # Simular clique inicial ao criar a aba
+        self.root.after(200, activate_focus)
         
         # Frame de botões do editor
         editor_buttons = tk.Frame(sql_frame, bg=self.styles.colors['card'])
@@ -717,7 +1532,7 @@ class SmartCityOSGUI:
         table_frame.pack(fill=tk.BOTH, expand=True)
         
         # Treeview estilizado para resultados
-        self.results_tree = ttk.Treeview(table_frame, show='tree', style='Results.Treeview')
+        self.results_tree = ttk.Treeview(table_frame, show='headings', style='Results.Treeview')
         
         # Scrollbars
         v_scrollbar = ttk.Scrollbar(table_frame, orient=tk.VERTICAL, command=self.results_tree.yview)
@@ -754,7 +1569,7 @@ class SmartCityOSGUI:
         main_container.columnconfigure(1, weight=1)
         
     def execute_sql(self):
-        if not self.connected:
+        if not self.connected or self.conn is None:
             messagebox.showwarning("Aviso", "Conecte-se ao banco de dados primeiro!")
             return
             
@@ -765,86 +1580,53 @@ class SmartCityOSGUI:
             return
             
         try:
-            with psy.connect(self.get_connection_string()) as conn:
-                with conn.cursor(row_factory=dict_row) as cur:
-                    start_time = datetime.now()
-                    cur.execute(sql)
-                    
-                    if sql.strip().upper().startswith('SELECT'):
-                        results = cur.fetchall()
-                        end_time = datetime.now()
-                        execution_time = (end_time - start_time).total_seconds()
-                        
-                        # Limpar treeview anterior
-                        for item in self.results_tree.get_children():
-                            self.results_tree.delete(item)
-                        
-                        if results:
-                            # Configurar colunas do treeview
-                            columns = list(results[0].keys())
-                            self.results_tree['columns'] = columns
-                            self.results_tree['show'] = 'headings'
-                            
-                            # Configurar headers
-                            for col in columns:
-                                self.results_tree.heading(col, text=col.replace('_', ' ').title())
-                                self.results_tree.column(col, width=120, minwidth=80)
-                            
-                            # Inserir dados com cores alternadas
-                            for i, row in enumerate(results):
-                                values = [str(row.get(col, '')) for col in columns]
-                                
-                                # Formatar valores para exibição
-                                formatted_values = []
-                                for val in values:
-                                    if val and val.replace('.', '').replace('-', '').isdigit():
-                                        # Números - alinhar à direita e formatar
-                                        try:
-                                            num_val = float(val)
-                                            if num_val.is_integer():
-                                                formatted_values.append(f"{int(num_val):,}")
-                                            else:
-                                                formatted_values.append(f"{num_val:,.2f}")
-                                        except:
-                                            formatted_values.append(val)
-                                    else:
-                                        # Texto - truncar se muito longo
-                                        if len(str(val)) > 50:
-                                            formatted_values.append(str(val)[:47] + "...")
-                                        else:
-                                            formatted_values.append(val)
-                                
-                                # Inserir item com tag baseada no índice
-                                tag = 'Results.Treeview.Even' if i % 2 == 0 else 'Results.Treeview.Odd'
-                                item = self.results_tree.insert('', tk.END, values=formatted_values, tags=(tag,))
-                            
-                            # Atualizar informações
-                            self.results_info.config(
-                                text=f"📊 {len(results)} registros retornados em {execution_time:.3f}s"
-                            )
-                            self.export_btn.config(state='normal')
-                            
-                        else:
-                            self.results_info.config(text="📭 Nenhum registro encontrado")
-                            self.export_btn.config(state='disabled')
-                            
-                    else:
-                        conn.commit()
-                        end_time = datetime.now()
-                        execution_time = (end_time - start_time).total_seconds()
-                        
-                        # Limpar treeview
-                        for item in self.results_tree.get_children():
-                            self.results_tree.delete(item)
-                        
-                        # Mostrar mensagem de sucesso
-                        self.results_info.config(
-                            text=f"✅ Query executada com sucesso! {cur.rowcount} linhas afetadas em {execution_time:.3f}s"
-                        )
-                        self.export_btn.config(state='disabled')
-                        
-                    self.status_label.config(text=f"Query executada em {execution_time:.3f}s")
-                    
+            # Garantir que a conexão está válida
+            if self.conn.closed:
+                messagebox.showerror("Erro", "Conexão com banco de dados foi fechada. Conecte-se novamente.")
+                return
+                
+            # Criar cursor com psycopg2.extras.DictCursor
+            cur = self.conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+            cur.execute(sql)
+            results = cur.fetchall()
+            
+            # Limpar treeview
+            for item in self.results_tree.get_children():
+                self.results_tree.delete(item)
+            
+            if results:
+                # Configurar colunas
+                columns = list(results[0].keys())
+                self.results_tree['columns'] = columns
+                
+                # Configurar headings
+                for col in columns:
+                    self.results_tree.heading(col, text=col.replace('_', ' ').title())
+                    self.results_tree.column(col, width=120, minwidth=80)
+                
+                # Inserir dados
+                for i, row in enumerate(results):
+                    values = [str(row.get(col, '')) if row.get(col, '') is not None else 'NULL' for col in columns]
+                    tag = 'Results.Treeview.Even' if i % 2 == 0 else 'Results.Treeview.Odd'
+                    self.results_tree.insert('', tk.END, values=values, tags=(tag,))
+                
+                # Atualizar informações
+                self.results_info.config(text=f"✅ {len(results)} registros encontrados")
+                self.export_btn.config(state='normal')
+                
+            else:
+                # Sem resultados
+                self.results_info.config(text="📭 Nenhum registro encontrado")
+                self.export_btn.config(state='disabled')
+                
+        except psycopg2.Error as e:
+            # Limpar treeview em caso de erro
+            for item in self.results_tree.get_children():
+                self.results_tree.delete(item)
+            
+            self.results_info.config(text=f"❌ Erro SQL: {str(e)}")
+            self.export_btn.config(state='disabled')
+            messagebox.showerror("Erro SQL", f"Erro ao executar consulta: {str(e)}")
         except Exception as e:
             # Limpar treeview em caso de erro
             for item in self.results_tree.get_children():
@@ -852,26 +1634,43 @@ class SmartCityOSGUI:
             
             self.results_info.config(text=f"❌ Erro: {str(e)}")
             self.export_btn.config(state='disabled')
-            messagebox.showerror("Erro SQL", f"Erro ao executar consulta: {str(e)}")
+            messagebox.showerror("Erro", f"Erro ao executar consulta: {str(e)}")
             
     def clear_sql(self):
-        self.sql_text.config(state='normal')
-        self.sql_text.delete(1.0, tk.END)
-        self.sql_text.insert(tk.END, "-- Digite sua consulta SQL aqui\n")
-        self.sql_text.insert(tk.END, "SELECT * FROM app_user LIMIT 10;")
-        self.sql_text.tag_add("comment", "1.0", "1.end")
-        self.sql_text.tag_config("comment", foreground='#616E88')
-        self.sql_text.focus_set()
-        self.sql_text.mark_set('insert', 'end')
-        
-        # Limpar resultados
-        for item in self.results_tree.get_children():
-            self.results_tree.delete(item)
-        
-        self.results_info.config(text="Execute uma query para ver os resultados")
-        self.export_btn.config(state='disabled')
+        """Limpa o editor SQL completamente"""
+        try:
+            # Limpar completamente
+            self.sql_text.delete(1.0, tk.END)
+            
+            # Inserir texto inicial
+            self.sql_text.insert(tk.END, "-- Digite sua consulta SQL aqui\n")
+            self.sql_text.insert(tk.END, "SELECT * FROM app_user LIMIT 10;")
+            
+            # Configurar tag de comentário
+            self.sql_text.tag_add("comment", "1.0", "1.end")
+            self.sql_text.tag_config("comment", foreground='#616E88')
+            
+            # FORÇAR FOCO
+            self.sql_text.focus_set()
+            self.sql_text.mark_set('insert', 'end')
+            
+            # Limpar resultados
+            if hasattr(self, 'results_tree'):
+                for item in self.results_tree.get_children():
+                    self.results_tree.delete(item)
+            
+            if hasattr(self, 'results_info'):
+                self.results_info.config(text="Execute uma query para ver os resultados")
+            
+            if hasattr(self, 'export_btn'):
+                self.export_btn.config(state='disabled')
+                
+        except Exception as e:
+            print(f"Erro ao limpar SQL: {e}")
+            messagebox.showerror("Erro", f"Erro ao limpar editor SQL: {str(e)}")
         
     def load_sql_example(self):
+        """Carrega um exemplo de query SQL no editor"""
         examples = [
             "SELECT COUNT(*) as total_citizens FROM citizen;",
             "SELECT * FROM vehicle WHERE allowed = TRUE;",
@@ -880,12 +1679,19 @@ class SmartCityOSGUI:
             "SELECT type, COUNT(*) FROM sensor GROUP BY type ORDER BY COUNT DESC;"
         ]
         
-        example = examples[0]  # Pode ser randomizado depois
-        self.sql_text.config(state='normal')
-        self.sql_text.delete(1.0, tk.END)
-        self.sql_text.insert(tk.END, example)
-        self.sql_text.focus_set()
-        self.sql_text.mark_set('insert', 'end')
+        try:
+            # Limpar e inserir exemplo
+            self.sql_text.delete(1.0, tk.END)
+            example = examples[0]  # Pode ser randomizado depois
+            self.sql_text.insert(tk.END, example)
+            
+            # FORÇAR FOCO
+            self.sql_text.focus_set()
+            self.sql_text.mark_set('insert', 'end')
+            
+        except Exception as e:
+            print(f"Erro ao carregar exemplo: {e}")
+            messagebox.showerror("Erro", f"Erro ao carregar exemplo SQL: {str(e)}")
         
     def export_results(self):
         """Exporta resultados da tabela para CSV"""
@@ -909,7 +1715,7 @@ class SmartCityOSGUI:
             filename = filedialog.asksaveasfilename(
                 defaultextension=".csv",
                 filetypes=[("CSV files", "*.csv"), ("All files", "*.*")],
-                title="Exportar Resultados para CSV"
+                title="Exportar Resultados"
             )
             
             if filename:
@@ -939,6 +1745,15 @@ class SmartCityOSGUI:
         
     def search_vehicle_by_plate(self):
         messagebox.showinfo("Em desenvolvimento", "Busca por placa em desenvolvimento!")
+        
+    def add_sensor_dialog(self):
+        messagebox.showinfo("Em desenvolvimento", "Funcionalidade de adicionar sensor em desenvolvimento!")
+        
+    def add_incident_dialog(self):
+        messagebox.showinfo("Em desenvolvimento", "Funcionalidade de registrar incidente em desenvolvimento!")
+        
+    def pay_fine_dialog(self):
+        messagebox.showinfo("Em desenvolvimento", "Funcionalidade de pagar multa em desenvolvimento!")
 
 def main():
     root = tk.Tk()

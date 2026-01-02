@@ -18,8 +18,7 @@ try:
         """Função principal da aplicação GUI"""
         try:
             # Criar janela principal
-            root = tk.Tk()
-            
+            root = tk.Tk()            
             # Configurar ícone (se disponível)
             try:
                 # Tenta carregar ícone personalizado
