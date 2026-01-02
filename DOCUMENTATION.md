@@ -21,18 +21,28 @@ O SmartCityOS é um sistema de gestão urbana inteligente desenvolvido em Python
 ### Estrutura do Projeto
 
 ```text
-smart-city-os/
-├── smart_city_os.ipynb    # Notebook principal com funções do sistema
-├── sql/                   # Scripts SQL do banco de dados
-│   ├── create_tables.sql  # Criação das tabelas
-│   ├── trigger_functions.sql  # Funções de trigger
-│   ├── triggers.sql       # Definição dos triggers
-│   └── index.sql          # Índices de performance
-├── csv/                   # Exportação de dados
-├── backup/                # Backups do banco
-├── venv/                  # Ambiente virtual
-├── DOCUMENTATION.md       # Este documento
-└── README.md              # Documentação principal
+SmartCityOS/
+├── notebooks/              # Notebooks Jupyter
+│   └── smart_city_os.ipynb # Notebook principal com funções do sistema
+├── functions/              # Módulos Python organizados
+│   ├── __init__.py         # Inicialização do pacote
+│   ├── conect_db.py        # Conexão com banco de dados
+│   ├── create_tables.py    # Criação de tabelas
+│   ├── create_triggers.py  # Criação de triggers
+│   ├── create_indexes.py   # Criação de índices
+│   ├── drop_tables.py      # Remoção de tabelas
+│   └── inserts.py          # Inserção de dados genéricos
+├── sql/                    # Scripts SQL do banco de dados
+│   ├── create_tables.sql   # Criação das tabelas
+│   ├── trigger_functions.sql # Funções de trigger
+│   ├── triggers.sql        # Definição dos triggers
+│   └── index.sql           # Índices de performance
+├── csv/                    # Exportação de dados
+├── backup/                 # Backups do banco
+├── venv/                   # Ambiente virtual
+├── requirements.txt        # Dependências Python
+├── DOCUMENTATION.md        # Este documento
+└── README.md               # Documentação principal
 ```
 
 ## 🗄️ Modelo de Dados
@@ -110,6 +120,7 @@ erDiagram
         int id PK
         int vehicle_id FK
         int sensor_id FK
+        numeric fine_amount
         timestamp occurred_at
         text location
         text description
@@ -168,6 +179,7 @@ erDiagram
         jsonb old_values
         jsonb new_values
         int app_user_id FK
+        int performed_by_app_user_id FK
         timestamp changed_at
     }
 
@@ -177,6 +189,7 @@ erDiagram
     app_user ||--o{ sensor : "1:N"
     app_user ||--o{ app_user_notification : "1:N"
     app_user ||--o{ audit_log : "1:N"
+    app_user ||--o{ audit_log : "performed_by"
     
     citizen ||--o{ vehicle : "1:N"
     citizen ||--o{ vehicle_citizen : "1:N"
@@ -324,6 +337,7 @@ Incidentes de trânsito detectados pelo sistema.
 - `id` (INTEGER, PRIMARY KEY) - Identificador único do incidente
 - `vehicle_id` (INTEGER, NOT NULL) - Veículo envolvido (FK)
 - `sensor_id` (INTEGER, NOT NULL) - Sensor que detectou (FK)
+- `fine_amount` (NUMERIC(10,2)) - Valor da multa para processamento automático
 - `occurred_at` (TIMESTAMP) - Data/hora do incidente
 - `location` (TEXT) - Localização do incidente
 - `description` (TEXT) - Descrição detalhada
@@ -427,13 +441,15 @@ Registro de auditoria do sistema.
 - `row_id` (INTEGER) - ID da linha afetada
 - `old_values` (JSONB) - Valores anteriores
 - `new_values` (JSONB) - Novos valores
-- `app_user_id` (INTEGER) - Usuário que realizou a operação (FK)
+- `app_user_id` (INTEGER) - Usuário afetado pela operação (FK)
+- `performed_by_app_user_id` (INTEGER) - Usuário que realizou a operação (FK)
 - `changed_at` (TIMESTAMP) - Data/hora da alteração
 
 **Constraints:**
 
 - `chk_operation` - Limita os tipos de operação
-- `fk_changed_by` - Chave estrangeira para `app_user`
+- `fk_affected_user` - Chave estrangeira para usuário afetado
+- `fk_performed_by_user` - Chave estrangeira para usuário que realizou
 
 ## ⚡ Triggers e Funções
 
@@ -446,7 +462,7 @@ Registro de auditoria do sistema.
 **Lógica:**
 
 - Identifica o cidadão proprietário do veículo
-- Verifica se há valor de multa definido
+- Verifica se há valor de multa definido em `traffic_incident.fine_amount`
 - Se o saldo for suficiente, deduz da carteira
 - Se insuficiente, zera o saldo, acumula como dívida e bloqueia acesso
 
@@ -462,17 +478,31 @@ Registro de auditoria do sistema.
 - Reativa o acesso quando a dívida for completamente paga
 - Atualiza timestamps automaticamente
 
-### 3. `audit_trigger_citizen`
+### 3. `audit_log_generic()`
 
-**Função:** `audit_log_function()`
-**Evento:** AFTER INSERT OR UPDATE OR DELETE ON `citizen`
-**Descrição:** Registra todas as alterações na tabela `citizen` para auditoria.
+**Função:** `audit_log_generic()`
+**Evento:** AFTER INSERT OR UPDATE OR DELETE em múltiplas tabelas
+**Descrição:** Função genérica de auditoria que registra todas as alterações.
 
 **Lógica:**
 
-- Captura dados antigos e novos
-- Registra tipo de operação
-- Armazena informações em `audit_log`
+- Captura usuário da sessão via `current_setting('app.current_user_id')`
+- Registra tipo de operação (INSERT/UPDATE/DELETE)
+- Armazena valores antigos e novos em JSONB
+- Identifica usuário que realizou a operação
+
+### 4. Triggers de Auditoria
+
+**Tabelas com auditoria:**
+
+- `app_user` → `audit_app_user`
+- `citizen` → `audit_citizen`
+- `vehicle` → `audit_vehicle`
+- `traffic_incident` → `audit_traffic_incident`
+- `fine` → `audit_fine`
+- `fine_payment` → `audit_fine_payment`
+
+**Descrição:** Cada tabela possui um trigger que aciona a função `audit_log_generic()` para registrar todas as operações DML.
 
 ## 🚀 Índices de Performance
 
@@ -510,7 +540,7 @@ Registro de auditoria do sistema.
 
 ### Índices de Auditoria
 
-- `idx_audit_log_app_user` - Logs por usuário
+- `idx_audit_log_app_user` - Logs por usuário afetado
 - `idx_audit_log_changed_at` - Ordenação por data
 - `idx_audit_log_table_operation` - Busca por tabela e operação
 - `idx_audit_log_row_id` - Busca por registro específico
