@@ -214,6 +214,12 @@ Tabela principal de usuários do sistema.
 - `created_at` (TIMESTAMP) - Data de criação do registro
 - `updated_at` (TIMESTAMP) - Data da última atualização
 
+**Constraints:**
+
+- `cpf` - Garante que o CPF tenha 11 caracteres
+- `birth_date` - Garante que a data de nascimento seja anterior à data atual
+- `email` - Garante que o email seja válido
+
 #### 2. `citizen`
 
 Extensão do usuário com informações específicas de cidadão.

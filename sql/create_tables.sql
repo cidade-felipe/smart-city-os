@@ -24,7 +24,10 @@ CREATE TABLE IF NOT EXISTS app_user (
     username VARCHAR(255) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT cpf CHECK (length(cpf) = 11),
+    CONSTRAINT birth_date CHECK (birth_date <= CURRENT_DATE),
+    CONSTRAINT email CHECK (email LIKE '%_@_%._%')
 );
 
 CREATE TABLE IF NOT EXISTS citizen (
