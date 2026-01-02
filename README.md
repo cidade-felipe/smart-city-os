@@ -66,7 +66,9 @@ git clone <repositório>
 cd smart-city-os
 python -m venv venv
 source venv/bin/activate  # Linux/Mac ou venv\Scripts\activate  # Windows
-pip install psycopg python-dotenv pandas tabulate
+
+# Instalar dependências
+pip install -r requirements.txt
 
 # Configurar banco de dados
 # Executar scripts SQL em ordem: create_tables.sql → trigger_functions.sql → triggers.sql → index.sql
