@@ -20,8 +20,26 @@ EXECUTE FUNCTION apply_fine_payment();
 -- Registra logs de auditoria para todas as tabelas que precisam de auditoria
 -- Estes gatilhos registrarão todas as alterações na tabela audit_log
 -- O app_user_id deve ser definido pela aplicação antes do gatilho ser acionado
-CREATE TRIGGER audit_trigger_citizen
-   AFTER INSERT OR UPDATE OR DELETE ON citizen
-   FOR EACH ROW 
-   WHEN (pg_trigger_depth() < 1)
-   EXECUTE FUNCTION audit_log_function();
+CREATE TRIGGER audit_app_user
+AFTER INSERT OR UPDATE OR DELETE ON app_user
+FOR EACH ROW EXECUTE FUNCTION audit_log_generic();
+
+CREATE TRIGGER audit_citizen
+AFTER INSERT OR UPDATE OR DELETE ON citizen
+FOR EACH ROW EXECUTE FUNCTION audit_log_generic();
+
+CREATE TRIGGER audit_vehicle
+AFTER INSERT OR UPDATE OR DELETE ON vehicle
+FOR EACH ROW EXECUTE FUNCTION audit_log_generic();
+
+CREATE TRIGGER audit_traffic_incident
+AFTER INSERT OR UPDATE OR DELETE ON traffic_incident
+FOR EACH ROW EXECUTE FUNCTION audit_log_generic();
+
+CREATE TRIGGER audit_fine
+AFTER INSERT OR UPDATE OR DELETE ON fine
+FOR EACH ROW EXECUTE FUNCTION audit_log_generic();
+
+CREATE TRIGGER audit_fine_payment
+AFTER INSERT OR UPDATE OR DELETE ON fine_payment
+FOR EACH ROW EXECUTE FUNCTION audit_log_generic();

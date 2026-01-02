@@ -190,12 +190,17 @@ CREATE TABLE IF NOT EXISTS audit_log (
     old_values JSONB,
     new_values JSONB,
     app_user_id INTEGER,
+    performed_by_app_user_id INTEGER,
     changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT chk_operation CHECK (
         operation IN ('INSERT', 'UPDATE', 'DELETE')
     ),
-    CONSTRAINT fk_changed_by
+    CONSTRAINT fk_affected_user
       FOREIGN KEY (app_user_id)
+      REFERENCES app_user(id)
+      ON DELETE SET NULL,
+    CONSTRAINT fk_performed_by_user
+      FOREIGN KEY (performed_by_app_user_id)
       REFERENCES app_user(id)
       ON DELETE SET NULL
 );

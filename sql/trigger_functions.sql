@@ -61,20 +61,37 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Essa função registra todas as operações de INSERT, UPDATE e DELETE no audit_log
--- O app_user_id deve ser definido pela aplicação antes do gatilho ser acionado
--- Esta função deve ser chamada por gatilhos em tabelas que precisam de auditoria
-CREATE OR REPLACE FUNCTION audit_log_function()
+CREATE OR REPLACE FUNCTION audit_log_generic()
 RETURNS TRIGGER AS $$
+DECLARE
+    v_app_user_id INT;
 BEGIN
-    INSERT INTO audit_log (affected_table, action, old_data, new_data, app_user_id)
+    -- tenta pegar o usuário da aplicação a partir da sessão
+    v_app_user_id := current_setting('app.current_user_id', true)::INT;
+
+    INSERT INTO audit_log (
+        table_name,
+        operation,
+        row_id,
+        old_values,
+        new_values,
+        app_user_id
+    )
     VALUES (
         TG_TABLE_NAME,
         TG_OP,
-        CASE WHEN TG_OP = 'UPDATE' THEN row_to_json(OLD) ELSE NULL END,
-        CASE WHEN TG_OP = 'INSERT' OR TG_OP = 'UPDATE' THEN row_to_json(NEW) ELSE NULL END,
-        NULL  -- app_user_id will be set by application logic
+        COALESCE(NEW.id, OLD.id),
+        CASE
+            WHEN TG_OP IN ('UPDATE', 'DELETE') THEN row_to_json(OLD)::jsonb
+            ELSE NULL
+        END,
+        CASE
+            WHEN TG_OP IN ('INSERT', 'UPDATE') THEN row_to_json(NEW)::jsonb
+            ELSE NULL
+        END,
+        v_app_user_id
     );
+
     RETURN NULL;
 END;
 $$ LANGUAGE plpgsql;
