@@ -21,7 +21,7 @@ O SmartCityOS é um sistema de gestão urbana inteligente desenvolvido em Python
 ### Estrutura do Projeto
 
 ```text
-SmartCityOS/
+smart-city-os/
 ├── smart_city_os.ipynb    # Notebook principal com funções do sistema
 ├── sql/                   # Scripts SQL do banco de dados
 │   ├── create_tables.sql  # Criação das tabelas

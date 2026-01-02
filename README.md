@@ -63,7 +63,7 @@ O SmartCityOS é um sistema de gestão urbana inteligente desenvolvido em Python
 ```bash
 # Clonar e configurar
 git clone <repositório>
-cd SmartCityOS
+cd smart-city-os
 python -m venv venv
 source venv/bin/activate  # Linux/Mac ou venv\Scripts\activate  # Windows
 pip install psycopg python-dotenv pandas tabulate
