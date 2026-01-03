@@ -30,17 +30,11 @@ CREATE TABLE IF NOT EXISTS citizen (
     email VARCHAR(255) UNIQUE NOT NULL,
     phone VARCHAR(20),
     address TEXT NOT NULL,
-    biometric_reference JSONB,
-    wallet_balance NUMERIC(10,2) DEFAULT 0.00,
-    debt NUMERIC(10,2) DEFAULT 0.00,
-    allowed BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT cpf CHECK (length(cpf) = 11),
     CONSTRAINT birth_date CHECK (birth_date <= CURRENT_DATE),
     CONSTRAINT email CHECK (email LIKE '%_@_%._%'),
-    CONSTRAINT chk_wallet_balance CHECK (wallet_balance >= 0),
-    CONSTRAINT chk_debt CHECK (debt >= 0),
     CONSTRAINT fk_user
       FOREIGN KEY (app_user_id)
       REFERENCES app_user(id)
@@ -140,7 +134,7 @@ CREATE TABLE IF NOT EXISTS fine (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT chk_fine_amount CHECK (amount >= 0),
     CONSTRAINT chk_fine_status CHECK (
-        status IN ('pending', 'paid', 'cancelled')
+        status IN ('pending', 'paid', 'cancelled','overdue')
     ),
     CONSTRAINT fk_traffic_incident
       FOREIGN KEY (traffic_incident_id)

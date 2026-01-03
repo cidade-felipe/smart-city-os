@@ -16,9 +16,28 @@ from dotenv import load_dotenv
 from gui.styles import SmartCityStyles
 import pandas as pd
 
-
 # Carregar variáveis de ambiente
 load_dotenv()
+
+def format_currency_brl(value):
+    """Formata valor monetário para o padrão brasileiro (R$ 1.234,56)"""
+    if value is None or value == 0:
+        return "R$ 0,00"
+    
+    # Arredondar para 2 casas decimais
+    value = round(float(value), 2)
+    
+    # Separar parte inteira e decimal
+    integer_part = int(value)
+    decimal_part = int(round((value - integer_part) * 100))
+    
+    # Formatar parte inteira com separador de milhar
+    if integer_part >= 1000:
+        integer_formatted = f"{integer_part:,}".replace(',', '.')
+    else:
+        integer_formatted = str(integer_part)
+    
+    return f"R$ {integer_formatted},{decimal_part:02d}"
 
 class SmartCityOSGUI:
     def __init__(self, root):
@@ -319,7 +338,7 @@ class SmartCityOSGUI:
                     stats['incidents'] = incident_stats
                     
                     # Multas
-                    cur.execute("SELECT COUNT(*) as total, COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending, COALESCE(SUM(amount), 0) as total_amount FROM fine")
+                    cur.execute("SELECT COUNT(*) as total, COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending, COUNT(CASE WHEN status = 'overdue' THEN 1 END) as overdue, COALESCE(SUM(amount), 0) as total_amount FROM fine")
                     fine_stats = cur.fetchone()
                     stats['fines'] = fine_stats
                     
@@ -360,13 +379,13 @@ class SmartCityOSGUI:
             ("👤 Usuários", stats['users']['total'], stats['users']['this_month'], 
              f"Novos este mês", self.styles.colors['primary']),
             ("👥 Cidadãos", stats['citizens']['total'], stats['citizens']['with_debt'], 
-             f"R$ {stats['citizens']['total_debt']:.2f}", self.styles.colors['success']),
+             format_currency_brl(stats['citizens']['total_debt']), self.styles.colors['success']),
             ("🚗 Veículos", stats['vehicles']['total'], stats['vehicles']['active'], 
              f"{stats['vehicles']['total'] - stats['vehicles']['active']} bloqueados", self.styles.colors['warning']),
             ("⚠️ Incidentes", stats['incidents']['total'], stats['incidents']['this_week'], 
              f"Média: {stats['incidents']['total']/30:.1f}/dia", self.styles.colors['accent']),
             ("💰 Multas", stats['fines']['total'], stats['fines']['pending'], 
-             f"R$ {stats['fines']['total_amount']:.2f}", self.styles.colors['secondary']),
+             format_currency_brl(stats['fines']['total_amount']), self.styles.colors['secondary']),
             ("📹 Sensores", stats['sensors']['total'], stats['sensors']['active'], 
              f"{stats['sensors']['total'] - stats['sensors']['active']} inativos", self.styles.colors['dark']),
         ]
@@ -754,8 +773,9 @@ class SmartCityOSGUI:
                 citizen['email'] or 'N/A',
                 citizen['cpf'] or 'N/A',
                 citizen['phone'] or 'N/A',
-                f"R$ {citizen['wallet_balance']:,.2f}" if citizen['wallet_balance'] else 'R$ 0,00',
-                f"R$ {citizen['debt']:,.2f}" if citizen['debt'] else 'R$ 0,00',
+                citizen['address'] or 'N/A',
+                format_currency_brl(citizen['wallet_balance']) if citizen['wallet_balance'] else 'R$ 0,00',
+                format_currency_brl(citizen['debt']) if citizen['debt'] else 'R$ 0,00',
                 status,
                 citizen['username'] or 'N/A'
             ))
@@ -783,9 +803,9 @@ class SmartCityOSGUI:
             
             # Cards
             cards_data = [
-                ("👥 Total Cidadãos", total_citizens, f"R$ {total_balance:,.2f}", self.styles.colors['primary']),
+                ("👥 Total Cidadãos", total_citizens, format_currency_brl(total_balance), self.styles.colors['primary']),
                 ("✅ Ativos", active_citizens, f"{(active_citizens/total_citizens*100):.1f}%" if total_citizens > 0 else "0%", self.styles.colors['success']),
-                ("🔴 Inativos", inactive_citizens, f"R$ {total_debt:,.2f}", self.styles.colors['warning'])
+                ("🔴 Inativos", inactive_citizens, format_currency_brl(total_debt), self.styles.colors['warning'])
             ]
             
             for i, (title, value, extra, color) in enumerate(cards_data):
@@ -827,7 +847,7 @@ class SmartCityOSGUI:
         table_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=(0, 20))
         
         # Treeview para cidadãos
-        columns = ('ID', 'Nome', 'Email', 'CPF', 'Telefone', 'Saldo', 'Dívida', 'Status', 'Username')
+        columns = ('ID', 'Nome', 'Email', 'CPF', 'Telefone', 'Endereço', 'Saldo', 'Dívida', 'Status', 'Username')
         self.citizens_tree = ttk.Treeview(table_frame, columns=columns, show='headings', style='Citizens.Treeview')
         
         # Configurar colunas
@@ -870,8 +890,9 @@ class SmartCityOSGUI:
                 citizen['email'] or 'N/A',
                 citizen['cpf'] or 'N/A',
                 citizen['phone'] or 'N/A',
-                f"R$ {citizen['wallet_balance']:,.2f}" if citizen['wallet_balance'] else 'R$ 0,00',
-                f"R$ {citizen['debt']:,.2f}" if citizen['debt'] else 'R$ 0,00',
+                citizen['address'] or 'N/A',
+                format_currency_brl(citizen['wallet_balance']) if citizen['wallet_balance'] else 'R$ 0,00',
+                format_currency_brl(citizen['debt']) if citizen['debt'] else 'R$ 0,00',
                 status,
                 citizen['username'] or 'N/A'
             ))
@@ -1599,7 +1620,7 @@ class SmartCityOSGUI:
                     occurred_at,
                     description,
                     incident['fine_count'] or 0,
-                    f"R$ {incident['total_fines']:.2f}" if incident['total_fines'] and incident['total_fines'] > 0 else "R$ 0,00"
+                    format_currency_brl(incident['total_fines']) if incident['total_fines'] and incident['total_fines'] > 0 else "R$ 0,00"
                 ), tags=(tag,))
             except Exception as e:
                 print(f"Erro ao processar incidente {i}: {e}")
@@ -1752,7 +1773,7 @@ class SmartCityOSGUI:
                     occurred_at,
                     description,
                     incident['fine_count'] or 0,
-                    f"R$ {incident['total_fines']:.2f}" if incident['total_fines'] and incident['total_fines'] > 0 else "R$ 0,00"
+                    format_currency_brl(incident['total_fines']) if incident['total_fines'] and incident['total_fines'] > 0 else "R$ 0,00"
                 ), tags=(tag,))
             except Exception as e:
                 print(f"Erro ao processar incidente {i}: {e}")
@@ -1877,9 +1898,11 @@ class SmartCityOSGUI:
         # Calcular estatísticas
         total_fines = len(fines)
         pending_fines = len([f for f in fines if f['status'] == 'pending'])
+        overdue_fines = len([f for f in fines if f['status'] == 'overdue'])
         paid_fines = len([f for f in fines if f['status'] == 'paid'])
         total_amount = sum(f['amount'] for f in fines if f['amount'])
         pending_amount = sum(f['amount'] for f in fines if f['status'] == 'pending' and f['amount'])
+        overdue_amount = sum(f['amount'] for f in fines if f['status'] == 'overdue' and f['amount'])
         
         # Frame de estatísticas
         stats_frame = tk.Frame(self.content_frame, bg=self.styles.colors['background'])
@@ -1887,8 +1910,9 @@ class SmartCityOSGUI:
         
         # Cards
         cards_data = [
-            ("💰 Total Multas", total_fines, f"R$ {total_amount:,.2f}", self.styles.colors['primary']),
-            ("🔴 Pendentes", pending_fines, f"R$ {pending_amount:,.2f}", self.styles.colors['warning']),
+            ("💰 Total Multas", total_fines, format_currency_brl(total_amount), self.styles.colors['primary']),
+            ("🔴 Pendentes", pending_fines, format_currency_brl(pending_amount), self.styles.colors['warning']),
+            ("⚠️ Vencidas", overdue_fines, format_currency_brl(overdue_amount), self.styles.colors['accent']),
             ("✅ Pagas", paid_fines, f"{(paid_fines/total_fines*100):.1f}%" if total_fines > 0 else "0%", self.styles.colors['success'])
         ]
         
@@ -1960,12 +1984,14 @@ class SmartCityOSGUI:
                 status_map = {
                     'pending': '🔴 Pendente',
                     'paid': '✅ Paga',
-                    'overdue': '⚠️ Vencida'
+                    'overdue': '⚠️ Vencida',
+                    'cancelled': '❌ Cancelada'
                 }
-                status = status_map.get(fine['status'], fine['status'])
+                
+                display_status = status_map.get(fine['status'], fine['status'])
                 
                 # Formatar valores
-                amount = f"R$ {fine['amount']:,.2f}" if fine['amount'] and fine['amount'] > 0 else "R$ 0,00"
+                amount = format_currency_brl(fine['amount']) if fine['amount'] and fine['amount'] > 0 else "R$ 0,00"
                 created_at = fine['created_at'].strftime('%d/%m/%Y') if fine['created_at'] else "N/A"
                 due_date = fine['due_date'].strftime('%d/%m/%Y') if fine['due_date'] else "N/A"
                 incident_location = fine.get('incident_location', 'N/A')
@@ -1978,11 +2004,11 @@ class SmartCityOSGUI:
                 self.fines_tree.insert('', tk.END, values=(
                     fine['id'],
                     amount,
-                    status,
+                    display_status,
                     created_at,
                     due_date,
                     incident_location,
-                    incident_description,
+                    incident_description[:30] + '...' if incident_description else 'N/A',
                     license_plate
                 ), tags=(tag,))
             except Exception as e:
@@ -2082,16 +2108,22 @@ class SmartCityOSGUI:
                 'paid': '✅ Paga',
                 'overdue': '⚠️ Vencida'
             }
-            status = status_map.get(fine['status'], fine['status'])
+            
+            # Verificar se multa pendente está vencida
+            display_status = status_map.get(fine['status'], fine['status'])
+            if fine['status'] == 'pending' and fine['due_date']:
+                from datetime import date
+                if fine['due_date'] < date.today():
+                    display_status = '⚠️ Vencida'
             
             # Formatar valores
-            amount = f"R$ {fine['amount']:,.2f}" if fine['amount'] else "R$ 0,00"
+            amount = format_currency_brl(fine['amount']) if fine['amount'] else "R$ 0,00"
             due_date = fine['due_date'].strftime('%d/%m/%Y') if fine['due_date'] else "N/A"
             
             self.fines_tree.insert('', tk.END, values=(
                 fine['id'],
                 amount,
-                status,
+                display_status,
                 fine['created_at'].strftime('%d/%m/%Y') if fine['created_at'] else "N/A",
                 due_date,
                 fine.get('incident_location', 'N/A'),
@@ -2260,28 +2292,32 @@ class SmartCityOSGUI:
         try:
             # Estatísticas de Multas
             cur.execute("""
-                SELECT status, COUNT(*) as count, COALESCE(SUM(amount), 0) as total_amount
-                FROM fine
-                GROUP BY status
-            """)
-            stats['fines_by_status'] = cur.fetchall()
-            
-            cur.execute("""
                 SELECT COUNT(*) as total_fines,
                        COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending_fines,
+                       COUNT(CASE WHEN status = 'overdue' THEN 1 END) as overdue_fines,
                        COUNT(CASE WHEN status = 'paid' THEN 1 END) as paid_fines,
                        COUNT(CASE WHEN status = 'cancelled' THEN 1 END) as cancelled_fines,
                        COALESCE(SUM(amount), 0) as total_amount,
                        COALESCE(SUM(CASE WHEN status = 'pending' THEN amount END), 0) as pending_amount,
+                       COALESCE(SUM(CASE WHEN status = 'overdue' THEN amount END), 0) as overdue_amount,
                        COALESCE(SUM(CASE WHEN status = 'paid' THEN amount END), 0) as paid_amount,
                        COALESCE(AVG(amount), 0) as avg_amount
                 FROM fine
             """)
             stats['fines'] = cur.fetchone()
+            
+            # Multas por status
+            cur.execute("""
+                SELECT status, COUNT(*) as count, COALESCE(SUM(amount), 0) as total_amount
+                FROM fine
+                GROUP BY status
+                ORDER BY count DESC
+            """)
+            stats['fines_by_status'] = cur.fetchall()
         except Exception as e:
             print(f"Erro ao carregar estatísticas de multas: {e}")
             stats['fines_by_status'] = []
-            stats['fines'] = {'total_fines': 0, 'pending_fines': 0, 'paid_fines': 0, 'cancelled_fines': 0, 'total_amount': 0, 'pending_amount': 0, 'paid_amount': 0, 'avg_amount': 0}
+            stats['fines'] = {'total_fines': 0, 'pending_fines': 0, 'overdue_fines': 0, 'paid_fines': 0, 'cancelled_fines': 0, 'total_amount': 0, 'pending_amount': 0, 'overdue_amount': 0, 'paid_amount': 0, 'avg_amount': 0}
         
         try:
             # Estatísticas de Leituras (últimos 7 dias)
@@ -2335,13 +2371,13 @@ class SmartCityOSGUI:
             ("👤 Usuários", stats['users']['total'], 
              f"{stats['users']['this_month']} novos este mês", self.styles.colors['primary']),
             ("👥 Cidadãos", stats['citizens']['total'], 
-             f"R$ {stats['citizens']['total_debt']:,.2f}", self.styles.colors['success']),
+             format_currency_brl(stats['citizens']['total_debt']), self.styles.colors['success']),
             ("🚗 Veículos", stats['vehicles']['total'],
              f"{stats['vehicles']['active']} ativos", self.styles.colors['warning']),
             ("⚠️ Incidentes", stats['incidents']['total_incidents'],
              f"{stats['incidents']['last_7_days']} esta semana", self.styles.colors['accent']),
             ("💰 Multas", stats['fines']['total_fines'],
-             f"R$ {stats['fines']['total_amount']:,.2f}", self.styles.colors['secondary'])
+             format_currency_brl(stats['fines']['total_amount']), self.styles.colors['secondary'])
         ]
         
         for i, (title, value, extra, color) in enumerate(main_cards):
@@ -2397,8 +2433,16 @@ class SmartCityOSGUI:
         secondary_cards.append((
             "💳 Multas Pendentes", 
             stats['fines']['pending_fines'],
-            f"R$ {stats['fines']['pending_amount']:,.2f}", 
+            format_currency_brl(stats['fines']['pending_amount']), 
             self.styles.colors['accent']
+        ))
+        
+        # Multas Vencidas
+        secondary_cards.append((
+            "⚠️ Multas Vencidas", 
+            stats['fines']['overdue_fines'],
+            format_currency_brl(stats['fines']['overdue_amount']), 
+            self.styles.colors['warning']
         ))
         
         # Incidentes Resolvidos
@@ -2496,14 +2540,14 @@ class SmartCityOSGUI:
                         row['location'] or "N/A", 
                         row['count'] or 0, 
                         row['fine_count'] or 0, 
-                        f"R$ {avg_fine:.2f}"
+                        format_currency_brl(avg_fine)
                     ]
                 elif title == "💰 Multas por Status":
                     total_amount = row['total_amount'] if row['total_amount'] and row['total_amount'] > 0 else 0
                     values = [
                         row['status'] or "N/A", 
                         row['count'] or 0, 
-                        f"R$ {total_amount:.2f}"
+                        format_currency_brl(total_amount)
                     ]
                 
                 tag = 'Results.Treeview.Even' if i % 2 == 0 else 'Results.Treeview.Odd'
@@ -2854,28 +2898,1014 @@ class SmartCityOSGUI:
             print('Erro ao exportar: ', e)
         
     def add_citizen_dialog(self):
-        messagebox.showinfo("Em desenvolvimento", "Funcionalidade de adicionar cidadão em desenvolvimento!")
+        """Abre diálogo para adicionar novo cidadão"""
+        dialog = tk.Toplevel(self.root)
+        dialog.title("➕ Adicionar Cidadão")
+        dialog.geometry("650x700")
+        dialog.configure(bg=self.styles.colors['background'])
+        dialog.transient(self.root)
+        dialog.grab_set()
+        
+        # Header
+        header = tk.Frame(dialog, bg=self.styles.colors['primary'], height=60)
+        header.pack(fill=tk.X)
+        header.pack_propagate(False)
+        
+        title = tk.Label(header, text="👤 Novo Cidadão", 
+                        bg=self.styles.colors['primary'], fg=self.styles.colors['white'],
+                        font=self.styles.fonts['title'])
+        title.pack(expand=True)
+        
+        # Form frame principal
+        main_form_frame = tk.Frame(dialog, bg=self.styles.colors['background'])
+        main_form_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+        
+        # Variáveis
+        vars = {
+            'username': tk.StringVar(),
+            'password': tk.StringVar(),
+            'first_name': tk.StringVar(),
+            'last_name': tk.StringVar(),
+            'cpf': tk.StringVar(),
+            'birth_date': tk.StringVar(),
+            'email': tk.StringVar(),
+            'phone': tk.StringVar(),
+            'state': tk.StringVar(),
+            'city': tk.StringVar(),
+            'neighborhood': tk.StringVar(),
+            'street': tk.StringVar(),
+            'number': tk.StringVar(),
+            'complement': tk.StringVar(),
+            'wallet_balance': tk.StringVar(value="0.00")
+        }
+        
+        # Seção 1: Dados Pessoais
+        personal_frame = tk.LabelFrame(main_form_frame, text="👤 Dados Pessoais", 
+                                      bg=self.styles.colors['background'], fg=self.styles.colors['text_primary'],
+                                      font=self.styles.fonts['heading'], relief='solid', bd=1)
+        personal_frame.pack(fill=tk.X, pady=(0, 15))
+        
+        personal_fields = [
+            ("🔐 Nome de Usuário", "username", "Digite o nome de usuário"),
+            ("🔒 Senha", "password", "Digite a senha"),
+            ("👤 Nome", "first_name", "Digite o nome"),
+            ("👥 Sobrenome", "last_name", "Digite o sobrenome"),
+            ("📋 CPF", "cpf", "Digite o CPF (11 dígitos)"),
+            ("🎂 Data de Nascimento", "birth_date", "DD/MM/AAAA")
+        ]
+        
+        for i, (label, key, placeholder) in enumerate(personal_fields):
+            tk.Label(personal_frame, text=label, bg=self.styles.colors['background'],
+                    fg=self.styles.colors['text_primary'], font=self.styles.fonts['normal']).grid(
+                row=i, column=0, sticky='w', padx=10, pady=(10 if i == 0 else 5))
+            
+            entry = tk.Entry(personal_frame, textvariable=vars[key], font=self.styles.fonts['normal'])
+            entry.grid(row=i, column=1, pady=5, padx=(10, 10), sticky='ew')
+            if key in ['password']:
+                entry.config(show='*')
+        
+        personal_frame.columnconfigure(1, weight=1)
+        
+        # Seção 2: Contato
+        contact_frame = tk.LabelFrame(main_form_frame, text="📞 Contato", 
+                                    bg=self.styles.colors['background'], fg=self.styles.colors['text_primary'],
+                                    font=self.styles.fonts['heading'], relief='solid', bd=1)
+        contact_frame.pack(fill=tk.X, pady=(0, 15))
+        
+        contact_fields = [
+            ("📧 Email", "email", "Digite o email"),
+            ("📱 Telefone", "phone", "Digite o telefone")
+        ]
+        
+        for i, (label, key, placeholder) in enumerate(contact_fields):
+            tk.Label(contact_frame, text=label, bg=self.styles.colors['background'],
+                    fg=self.styles.colors['text_primary'], font=self.styles.fonts['normal']).grid(
+                row=i, column=0, sticky='w', padx=10, pady=(10 if i == 0 else 5))
+            
+            entry = tk.Entry(contact_frame, textvariable=vars[key], font=self.styles.fonts['normal'])
+            entry.grid(row=i, column=1, pady=5, padx=(10, 10), sticky='ew')
+        
+        contact_frame.columnconfigure(1, weight=1)
+        
+        # Seção 3: Endereço
+        address_frame = tk.LabelFrame(main_form_frame, text="🏠 Endereço", 
+                                     bg=self.styles.colors['background'], fg=self.styles.colors['text_primary'],
+                                     font=self.styles.fonts['heading'], relief='solid', bd=1)
+        address_frame.pack(fill=tk.X, pady=(0, 15))
+        
+        # Primeira linha do endereço
+        address_row1 = tk.Frame(address_frame, bg=self.styles.colors['background'])
+        address_row1.pack(fill=tk.X, padx=10, pady=5)
+        
+        tk.Label(address_row1, text="🏠 Estado:", bg=self.styles.colors['background'],
+                fg=self.styles.colors['text_primary'], font=self.styles.fonts['normal']).pack(side=tk.LEFT, padx=(0, 5))
+        state_entry = tk.Entry(address_row1, textvariable=vars['state'], font=self.styles.fonts['normal'], width=5)
+        state_entry.pack(side=tk.LEFT, padx=(0, 15))
+        
+        tk.Label(address_row1, text="🏙️ Cidade:", bg=self.styles.colors['background'],
+                fg=self.styles.colors['text_primary'], font=self.styles.fonts['normal']).pack(side=tk.LEFT, padx=(0, 5))
+        city_entry = tk.Entry(address_row1, textvariable=vars['city'], font=self.styles.fonts['normal'], width=20)
+        city_entry.pack(side=tk.LEFT, padx=(0, 15))
+        
+        tk.Label(address_row1, text="🏘️ Bairro:", bg=self.styles.colors['background'],
+                fg=self.styles.colors['text_primary'], font=self.styles.fonts['normal']).pack(side=tk.LEFT, padx=(0, 5))
+        neighborhood_entry = tk.Entry(address_row1, textvariable=vars['neighborhood'], font=self.styles.fonts['normal'], width=15)
+        neighborhood_entry.pack(side=tk.LEFT)
+        
+        # Segunda linha do endereço
+        address_row2 = tk.Frame(address_frame, bg=self.styles.colors['background'])
+        address_row2.pack(fill=tk.X, padx=10, pady=5)
+        
+        tk.Label(address_row2, text="🛣️ Rua:", bg=self.styles.colors['background'],
+                fg=self.styles.colors['text_primary'], font=self.styles.fonts['normal']).pack(side=tk.LEFT, padx=(0, 5))
+        street_entry = tk.Entry(address_row2, textvariable=vars['street'], font=self.styles.fonts['normal'], width=25)
+        street_entry.pack(side=tk.LEFT, padx=(0, 15))
+        
+        tk.Label(address_row2, text="🔢 Número:", bg=self.styles.colors['background'],
+                fg=self.styles.colors['text_primary'], font=self.styles.fonts['normal']).pack(side=tk.LEFT, padx=(0, 5))
+        number_entry = tk.Entry(address_row2, textvariable=vars['number'], font=self.styles.fonts['normal'], width=8)
+        number_entry.pack(side=tk.LEFT, padx=(0, 15))
+        
+        tk.Label(address_row2, text="📝 Complemento:", bg=self.styles.colors['background'],
+                fg=self.styles.colors['text_primary'], font=self.styles.fonts['normal']).pack(side=tk.LEFT, padx=(0, 5))
+        complement_entry = tk.Entry(address_row2, textvariable=vars['complement'], font=self.styles.fonts['normal'], width=18)
+        complement_entry.pack(side=tk.LEFT)
+        
+        # Seção 4: Financeiro
+        financial_frame = tk.LabelFrame(main_form_frame, text="💰 Financeiro", 
+                                       bg=self.styles.colors['background'], fg=self.styles.colors['text_primary'],
+                                       font=self.styles.fonts['heading'], relief='solid', bd=1)
+        financial_frame.pack(fill=tk.X, pady=(0, 15))
+        
+        financial_fields = [
+            ("💰 Saldo Inicial (R$)", "wallet_balance", "0.00")
+        ]
+        
+        for i, (label, key, placeholder) in enumerate(financial_fields):
+            tk.Label(financial_frame, text=label, bg=self.styles.colors['background'],
+                    fg=self.styles.colors['text_primary'], font=self.styles.fonts['normal']).grid(
+                row=i, column=0, sticky='w', padx=10, pady=(10 if i == 0 else 5))
+            
+            entry = tk.Entry(financial_frame, textvariable=vars[key], font=self.styles.fonts['normal'])
+            entry.grid(row=i, column=1, pady=5, padx=(10, 10), sticky='ew')
+        
+        financial_frame.columnconfigure(1, weight=1)
+        
+        # Botões
+        button_frame = tk.Frame(main_form_frame, bg=self.styles.colors['background'])
+        button_frame.pack(fill=tk.X, pady=20)
+        
+        def save_citizen():
+            try:
+                # Validar campos
+                username = vars['username'].get().strip()
+                password = vars['password'].get().strip()
+                first_name = vars['first_name'].get().strip()
+                last_name = vars['last_name'].get().strip()
+                cpf = vars['cpf'].get().strip()
+                birth_date = vars['birth_date'].get().strip()
+                email = vars['email'].get().strip()
+                phone = vars['phone'].get().strip()
+                state = vars['state'].get().strip()
+                city = vars['city'].get().strip()
+                neighborhood = vars['neighborhood'].get().strip()
+                street = vars['street'].get().strip()
+                number = vars['number'].get().strip()
+                complement = vars['complement'].get().strip()
+                
+                # Montar endereço completo
+                address_parts = [street, number, neighborhood, city, state]
+                if complement:
+                    address_parts.append(complement)
+                address = ', '.join(address_parts)
+                
+                if not all([username, password, first_name, last_name, cpf, email, state, city, street]):
+                    messagebox.showerror("Erro", "Preencha todos os campos obrigatórios!")
+                    return
+                
+                # Validar CPF
+                cpf_clean = cpf.replace('.', '').replace('-', '')
+                if len(cpf_clean) != 11 or not cpf_clean.isdigit():
+                    messagebox.showerror("Erro", "CPF inválido! Deve ter 11 dígitos.")
+                    return
+                
+                # Validar data
+                try:
+                    from datetime import datetime
+                    birth_date_obj = datetime.strptime(birth_date, '%d/%m/%Y').date()
+                except:
+                    messagebox.showerror("Erro", "Data de nascimento inválida! Use DD/MM/AAAA")
+                    return
+                
+                with psy.connect(self.get_connection_string()) as conn:
+                    with conn.cursor() as cur:
+                        # Inserir em app_user primeiro (sem hash temporariamente)
+                        password_hash = password.encode().decode()  # Temporário sem bcrypt
+                        
+                        cur.execute("""
+                            INSERT INTO app_user (username, password_hash) 
+                            VALUES (%s, %s) RETURNING id
+                        """, (username, password_hash))
+                        app_user_id = cur.fetchone()[0]
+                        
+                        # Inserir em citizen
+                        cur.execute("""
+                            INSERT INTO citizen (
+                                app_user_id, first_name, last_name, cpf, birth_date, 
+                                email, phone, address, wallet_balance
+                            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        """, (
+                            app_user_id,
+                            first_name,
+                            last_name,
+                            cpf_clean,
+                            birth_date_obj,
+                            email,
+                            phone,
+                            address,  # Endereço completo concatenado
+                            float(vars['wallet_balance'].get())
+                        ))
+                        
+                        conn.commit()
+                
+                messagebox.showinfo("Sucesso", "Cidadão adicionado com sucesso!")
+                dialog.destroy()
+                self.show_citizens()  # Atualizar a lista
+                
+            except Exception as e:
+                messagebox.showerror("Erro", f"Erro ao adicionar cidadão: {str(e)}")
+        
+        tk.Button(button_frame, text="💾 Salvar", command=save_citizen,
+                 bg=self.styles.colors['success'], fg=self.styles.colors['white'],
+                 font=self.styles.fonts['button'], padx=20, pady=8).pack(side=tk.LEFT, padx=5)
+        
+        tk.Button(button_frame, text="❌ Cancelar", command=dialog.destroy,
+                 bg=self.styles.colors['accent'], fg=self.styles.colors['white'],
+                 font=self.styles.fonts['button'], padx=20, pady=8).pack(side=tk.LEFT, padx=5)
         
     def search_citizen_by_cpf(self):
         messagebox.showinfo("Em desenvolvimento", "Busca por CPF em desenvolvimento!")
         
     def add_vehicle_dialog(self):
-        messagebox.showinfo("Em desenvolvimento", "Funcionalidade de adicionar veículo em desenvolvimento!")
+        """Abre diálogo para adicionar novo veículo"""
+        dialog = tk.Toplevel(self.root)
+        dialog.title("➕ Adicionar Veículo")
+        dialog.geometry("450x400")
+        dialog.configure(bg=self.styles.colors['background'])
+        dialog.transient(self.root)
+        dialog.grab_set()
+        
+        # Header
+        header = tk.Frame(dialog, bg=self.styles.colors['warning'], height=60)
+        header.pack(fill=tk.X)
+        header.pack_propagate(False)
+        
+        title = tk.Label(header, text="🚗 Novo Veículo", 
+                        bg=self.styles.colors['warning'], fg=self.styles.colors['white'],
+                        font=self.styles.fonts['title'])
+        title.pack(expand=True)
+        
+        # Form frame
+        form_frame = tk.Frame(dialog, bg=self.styles.colors['background'])
+        form_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+        
+        # Variáveis
+        vars = {
+            'username': tk.StringVar(),
+            'password': tk.StringVar(),
+            'license_plate': tk.StringVar(),
+            'model': tk.StringVar(),
+            'year': tk.StringVar(),
+            'citizen_cpf': tk.StringVar()
+        }
+        
+        # Campos do formulário
+        fields = [
+            ("🔐 Nome de Usuário", "username", "Digite o nome de usuário para o veículo"),
+            ("🔒 Senha", "password", "Digite a senha"),
+            ("🚗 Placa", "license_plate", "ABC-1234"),
+            ("📋 Modelo", "model", "Ex: Fiat Palio"),
+            ("📅 Ano", "year", "2024"),
+            ("👤 CPF do Proprietário (opcional)", "citizen_cpf", "CPF do cidadão proprietário")
+        ]
+        
+        for i, (label, key, placeholder) in enumerate(fields):
+            tk.Label(form_frame, text=label, bg=self.styles.colors['background'],
+                    fg=self.styles.colors['text_primary'], font=self.styles.fonts['normal']).grid(
+                row=i, column=0, sticky='w', pady=5)
+            
+            entry = tk.Entry(form_frame, textvariable=vars[key], font=self.styles.fonts['normal'])
+            entry.grid(row=i, column=1, pady=5, padx=(10, 0), sticky='ew')
+            if key in ['password']:
+                entry.config(show='*')
+        
+        form_frame.columnconfigure(1, weight=1)
+        
+        # Botões
+        button_frame = tk.Frame(form_frame, bg=self.styles.colors['background'])
+        button_frame.grid(row=len(fields), column=0, columnspan=2, pady=20)
+        
+        def save_vehicle():
+            try:
+                # Validar campos obrigatórios
+                if not all(vars[k].get().strip() for k in ['username', 'password', 'license_plate', 'model', 'year']):
+                    messagebox.showerror("Erro", "Preencha todos os campos obrigatórios!")
+                    return
+                
+                # Validar ano
+                try:
+                    year = int(vars['year'].get())
+                    current_year = 2024
+                    if year < 1900 or year > current_year + 1:
+                        messagebox.showerror("Erro", f"Ano inválido! Deve estar entre 1900 e {current_year + 1}")
+                        return
+                except ValueError:
+                    messagebox.showerror("Erro", "Ano deve ser um número válido!")
+                    return
+                
+                # Validar placa
+                license_plate = vars['license_plate'].get().upper()
+                if len(license_plate) < 7:
+                    messagebox.showerror("Erro", "Placa muito curta! Mínimo 7 caracteres.")
+                    return
+                
+                citizen_id = None
+                # Se CPF foi informado, buscar o cidadão
+                if vars['citizen_cpf'].get().strip():
+                    cpf_clean = vars['citizen_cpf'].get().replace('.', '').replace('-', '')
+                    if len(cpf_clean) != 11 or not cpf_clean.isdigit():
+                        messagebox.showerror("Erro", "CPF inválido! Deve ter 11 dígitos.")
+                        return
+                    
+                    with psy.connect(self.get_connection_string()) as conn:
+                        with conn.cursor() as cur:
+                            cur.execute("SELECT id FROM citizen WHERE cpf = %s", (cpf_clean,))
+                            citizen_result = cur.fetchone()
+                            if citizen_result:
+                                citizen_id = citizen_result[0]
+                            else:
+                                messagebox.showwarning("Aviso", "CPF não encontrado. Veículo será cadastrado sem proprietário.")
+                
+                with psy.connect(self.get_connection_string()) as conn:
+                    with conn.cursor() as cur:
+                        # Inserir em app_user primeiro (sem hash temporariamente)
+                        password_hash = vars['password'].get().encode().decode()  # Temporário sem bcrypt
+                        
+                        cur.execute("""
+                            INSERT INTO app_user (username, password_hash) 
+                            VALUES (%s, %s) RETURNING id
+                        """, (vars['username'].get(), password_hash))
+                        app_user_id = cur.fetchone()[0]
+                        
+                        # Inserir em vehicle
+                        cur.execute("""
+                            INSERT INTO vehicle (
+                                app_user_id, license_plate, model, year, citizen_id
+                            ) VALUES (%s, %s, %s, %s, %s)
+                        """, (
+                            app_user_id,
+                            license_plate,
+                            vars['model'].get(),
+                            year,
+                            citizen_id
+                        ))
+                        
+                        # Se tem proprietário, adicionar relação na vehicle_citizen
+                        if citizen_id:
+                            cur.execute("""
+                                INSERT INTO vehicle_citizen (vehicle_id, citizen_id) 
+                                VALUES (currval('vehicle_id_seq'), %s)
+                            """, (citizen_id,))
+                        
+                        conn.commit()
+                
+                messagebox.showinfo("Sucesso", "Veículo adicionado com sucesso!")
+                dialog.destroy()
+                self.show_vehicles()  # Atualizar a lista
+                
+            except Exception as e:
+                messagebox.showerror("Erro", f"Erro ao adicionar veículo: {str(e)}")
+        
+        tk.Button(button_frame, text="💾 Salvar", command=save_vehicle,
+                 bg=self.styles.colors['success'], fg=self.styles.colors['white'],
+                 font=self.styles.fonts['button'], padx=20, pady=8).pack(side=tk.LEFT, padx=5)
+        
+        tk.Button(button_frame, text="❌ Cancelar", command=dialog.destroy,
+                 bg=self.styles.colors['accent'], fg=self.styles.colors['white'],
+                 font=self.styles.fonts['button'], padx=20, pady=8).pack(side=tk.LEFT, padx=5)
         
     def search_vehicle_by_plate(self):
         messagebox.showinfo("Em desenvolvimento", "Busca por placa em desenvolvimento!")
         
     def add_sensor_dialog(self):
-        messagebox.showinfo("Em desenvolvimento", "Funcionalidade de adicionar sensor em desenvolvimento!")
+        """Abre diálogo para adicionar novo sensor"""
+        dialog = tk.Toplevel(self.root)
+        dialog.title("➕ Adicionar Sensor")
+        dialog.geometry("450x350")
+        dialog.configure(bg=self.styles.colors['background'])
+        dialog.transient(self.root)
+        dialog.grab_set()
+        
+        # Header
+        header = tk.Frame(dialog, bg=self.styles.colors['dark'], height=60)
+        header.pack(fill=tk.X)
+        header.pack_propagate(False)
+        
+        title = tk.Label(header, text="📹 Novo Sensor", 
+                        bg=self.styles.colors['dark'], fg=self.styles.colors['white'],
+                        font=self.styles.fonts['title'])
+        title.pack(expand=True)
+        
+        # Form frame
+        form_frame = tk.Frame(dialog, bg=self.styles.colors['background'])
+        form_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+        
+        # Variáveis
+        vars = {
+            'username': tk.StringVar(),
+            'password': tk.StringVar(),
+            'model': tk.StringVar(),
+            'type': tk.StringVar(),
+            'location': tk.StringVar()
+        }
+        
+        # Tipos de sensores disponíveis
+        sensor_types = ['Câmera', 'Radar', 'LIDAR', 'Sensor de Tráfego', 'Sensor de Velocidade', 'Outro']
+        
+        # Campos do formulário
+        fields = [
+            ("🔐 Nome de Usuário", "username", "Digite o nome de usuário para o sensor"),
+            ("🔒 Senha", "password", "Digite a senha"),
+            ("📋 Modelo", "model", "Ex: IP Camera X100"),
+            ("📹 Tipo", "type", sensor_types),
+            ("📍 Localização", "location", "Ex: Av. Principal, 1000")
+        ]
+        
+        for i, (label, key, placeholder) in enumerate(fields):
+            tk.Label(form_frame, text=label, bg=self.styles.colors['background'],
+                    fg=self.styles.colors['text_primary'], font=self.styles.fonts['normal']).grid(
+                row=i, column=0, sticky='w', pady=5)
+            
+            if key == 'type':
+                # Combobox para tipo
+                combo = ttk.Combobox(form_frame, textvariable=vars[key], values=placeholder, 
+                                   state="readonly", font=self.styles.fonts['normal'])
+                combo.grid(row=i, column=1, pady=5, padx=(10, 0), sticky='ew')
+                combo.current(0)
+            else:
+                entry = tk.Entry(form_frame, textvariable=vars[key], font=self.styles.fonts['normal'])
+                entry.grid(row=i, column=1, pady=5, padx=(10, 0), sticky='ew')
+                if key in ['password']:
+                    entry.config(show='*')
+        
+        form_frame.columnconfigure(1, weight=1)
+        
+        # Botões
+        button_frame = tk.Frame(form_frame, bg=self.styles.colors['background'])
+        button_frame.grid(row=len(fields), column=0, columnspan=2, pady=20)
+        
+        def save_sensor():
+            try:
+                # Validar campos obrigatórios
+                if not all(vars[k].get().strip() for k in ['username', 'password', 'model', 'type', 'location']):
+                    messagebox.showerror("Erro", "Preencha todos os campos obrigatórios!")
+                    return
+                
+                with psy.connect(self.get_connection_string()) as conn:
+                    with conn.cursor() as cur:
+                        # Inserir em app_user primeiro (sem hash temporariamente)
+                        password_hash = vars['password'].get().encode().decode()  # Temporário sem bcrypt
+                        
+                        cur.execute("""
+                            INSERT INTO app_user (username, password_hash) 
+                            VALUES (%s, %s) RETURNING id
+                        """, (vars['username'].get(), password_hash))
+                        app_user_id = cur.fetchone()[0]
+                        
+                        # Inserir em sensor
+                        cur.execute("""
+                            INSERT INTO sensor (
+                                app_user_id, model, type, location
+                            ) VALUES (%s, %s, %s, %s)
+                        """, (
+                            app_user_id,
+                            vars['model'].get(),
+                            vars['type'].get(),
+                            vars['location'].get()
+                        ))
+                        
+                        conn.commit()
+                
+                messagebox.showinfo("Sucesso", "Sensor adicionado com sucesso!")
+                dialog.destroy()
+                self.show_sensors()  # Atualizar a lista
+                
+            except Exception as e:
+                messagebox.showerror("Erro", f"Erro ao adicionar sensor: {str(e)}")
+        
+        tk.Button(button_frame, text="💾 Salvar", command=save_sensor,
+                 bg=self.styles.colors['success'], fg=self.styles.colors['white'],
+                 font=self.styles.fonts['button'], padx=20, pady=8).pack(side=tk.LEFT, padx=5)
+        
+        tk.Button(button_frame, text="❌ Cancelar", command=dialog.destroy,
+                 bg=self.styles.colors['accent'], fg=self.styles.colors['white'],
+                 font=self.styles.fonts['button'], padx=20, pady=8).pack(side=tk.LEFT, padx=5)
         
     def add_incident_dialog(self):
-        messagebox.showinfo("Em desenvolvimento", "Funcionalidade de registrar incidente em desenvolvimento!")
+        """Abre diálogo para registrar novo incidente"""
+        dialog = tk.Toplevel(self.root)
+        dialog.title("➕ Registrar Incidente")
+        dialog.geometry("500x400")
+        dialog.configure(bg=self.styles.colors['background'])
+        dialog.transient(self.root)
+        dialog.grab_set()
+        
+        # Header
+        header = tk.Frame(dialog, bg=self.styles.colors['accent'], height=60)
+        header.pack(fill=tk.X)
+        header.pack_propagate(False)
+        
+        title = tk.Label(header, text="⚠️ Novo Incidente", 
+                        bg=self.styles.colors['accent'], fg=self.styles.colors['white'],
+                        font=self.styles.fonts['title'])
+        title.pack(expand=True)
+        
+        # Form frame
+        form_frame = tk.Frame(dialog, bg=self.styles.colors['background'])
+        form_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+        
+        # Variáveis
+        vars = {
+            'vehicle_plate': tk.StringVar(),
+            'sensor_location': tk.StringVar(),
+            'location': tk.StringVar(),
+            'description': tk.StringVar()
+        }
+        
+        # Carregar dados para dropdowns
+        vehicles_list = []
+        sensors_list = []
+        
+        try:
+            with psy.connect(self.get_connection_string()) as conn:
+                with conn.cursor() as cur:
+                    # Buscar veículos
+                    cur.execute("SELECT license_plate, model FROM vehicle WHERE allowed = true ORDER BY license_plate")
+                    vehicles_list = [f"{row[0]} - {row[1]}" for row in cur.fetchall()]
+                    
+                    # Buscar sensores
+                    cur.execute("SELECT id, location, type FROM sensor WHERE active = true ORDER BY location")
+                    sensors_list = [f"{row[0]} - {row[2]} - {row[1]}" for row in cur.fetchall()]
+        except:
+            pass
+        
+        # Campos do formulário
+        fields = [
+            ("🚗 Veículo", "vehicle_plate", vehicles_list),
+            ("📹 Sensor", "sensor_location", sensors_list),
+            ("📍 Localização", "location", "Ex: Av. Principal, esquina com Rua Secundária"),
+            ("📝 Descrição", "description", "Descreva o incidente em detalhes")
+        ]
+        
+        for i, (label, key, placeholder) in enumerate(fields):
+            tk.Label(form_frame, text=label, bg=self.styles.colors['background'],
+                    fg=self.styles.colors['text_primary'], font=self.styles.fonts['normal']).grid(
+                row=i, column=0, sticky='w', pady=5)
+            
+            if key in ['vehicle_plate', 'sensor_location']:
+                # Combobox para veículos e sensores
+                combo = ttk.Combobox(form_frame, textvariable=vars[key], values=placeholder, 
+                                   state="readonly", font=self.styles.fonts['normal'])
+                combo.grid(row=i, column=1, pady=5, padx=(10, 0), sticky='ew')
+                if placeholder and len(placeholder) > 0:
+                    combo.current(0)
+            elif key == 'description':
+                # Text area para descrição
+                text_area = tk.Text(form_frame, height=4, width=40, font=self.styles.fonts['normal'])
+                text_area.insert('1.0', placeholder)
+                text_area.grid(row=i, column=1, pady=5, padx=(10, 0), sticky='ew')
+                vars[key] = text_area
+            else:
+                entry = tk.Entry(form_frame, textvariable=vars[key], font=self.styles.fonts['normal'])
+                entry.grid(row=i, column=1, pady=5, padx=(10, 0), sticky='ew')
+        
+        form_frame.columnconfigure(1, weight=1)
+        
+        # Botões
+        button_frame = tk.Frame(form_frame, bg=self.styles.colors['background'])
+        button_frame.grid(row=len(fields), column=0, columnspan=2, pady=20)
+        
+        def save_incident():
+            try:
+                # Validar campos obrigatórios
+                if not vars['vehicle_plate'].get().strip() or not vars['sensor_location'].get().strip():
+                    messagebox.showerror("Erro", "Selecione o veículo e o sensor!")
+                    return
+                
+                if not vars['location'].get().strip():
+                    messagebox.showerror("Erro", "Preencha a localização!")
+                    return
+                
+                description = vars['description'].get('1.0', 'end').strip()
+                if not description:
+                    messagebox.showerror("Erro", "Preencha a descrição do incidente!")
+                    return
+                
+                # Extrair IDs
+                vehicle_plate = vars['vehicle_plate'].get().split(' - ')[0]
+                sensor_info = vars['sensor_location'].get().split(' - ')
+                sensor_id = int(sensor_info[0])
+                
+                with psy.connect(self.get_connection_string()) as conn:
+                    with conn.cursor() as cur:
+                        # Buscar ID do veículo
+                        cur.execute("SELECT id FROM vehicle WHERE license_plate = %s", (vehicle_plate,))
+                        vehicle_result = cur.fetchone()
+                        if not vehicle_result:
+                            messagebox.showerror("Erro", "Veículo não encontrado!")
+                            return
+                        vehicle_id = vehicle_result[0]
+                        
+                        # Inserir incidente
+                        cur.execute("""
+                            INSERT INTO traffic_incident (
+                                vehicle_id, sensor_id, location, description
+                            ) VALUES (%s, %s, %s, %s)
+                        """, (
+                            vehicle_id,
+                            sensor_id,
+                            vars['location'].get(),
+                            description
+                        ))
+                        
+                        conn.commit()
+                
+                messagebox.showinfo("Sucesso", "Incidente registrado com sucesso!")
+                dialog.destroy()
+                self.show_incidents()  # Atualizar a lista
+                
+            except Exception as e:
+                messagebox.showerror("Erro", f"Erro ao registrar incidente: {str(e)}")
+        
+        tk.Button(button_frame, text="💾 Salvar", command=save_incident,
+                 bg=self.styles.colors['success'], fg=self.styles.colors['white'],
+                 font=self.styles.fonts['button'], padx=20, pady=8).pack(side=tk.LEFT, padx=5)
+        
+        tk.Button(button_frame, text="❌ Cancelar", command=dialog.destroy,
+                 bg=self.styles.colors['accent'], fg=self.styles.colors['white'],
+                 font=self.styles.fonts['button'], padx=20, pady=8).pack(side=tk.LEFT, padx=5)
         
     def pay_fine_dialog(self):
-        messagebox.showinfo("Em desenvolvimento", "Funcionalidade de pagar multa em desenvolvimento!")
+        """Abre diálogo para pagar multa existente"""
+        dialog = tk.Toplevel(self.root)
+        dialog.title("💳 Pagar Multa")
+        dialog.geometry("500x400")
+        dialog.configure(bg=self.styles.colors['background'])
+        dialog.transient(self.root)
+        dialog.grab_set()
+        
+        # Header
+        header = tk.Frame(dialog, bg=self.styles.colors['success'], height=60)
+        header.pack(fill=tk.X)
+        header.pack_propagate(False)
+        
+        title = tk.Label(header, text="💳 Pagar Multa", 
+                        bg=self.styles.colors['success'], fg=self.styles.colors['white'],
+                        font=self.styles.fonts['title'])
+        title.pack(expand=True)
+        
+        # Form frame
+        form_frame = tk.Frame(dialog, bg=self.styles.colors['background'])
+        form_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+        
+        # Variáveis
+        vars = {
+            'fine': tk.StringVar(),
+            'amount': tk.StringVar(),
+            'payment_method': tk.StringVar()
+        }
+        
+        # Carregar multas pendentes
+        fines_list = []
+        
+        try:
+            with psy.connect(self.get_connection_string()) as conn:
+                with conn.cursor(row_factory=dict_row) as cur:
+                    cur.execute("""
+                        SELECT f.id, f.amount, f.due_date, f.created_at,
+                               ti.location, ti.occurred_at,
+                               v.license_plate, c.first_name, c.last_name
+                        FROM fine f
+                        JOIN traffic_incident ti ON f.traffic_incident_id = ti.id
+                        LEFT JOIN vehicle v ON ti.vehicle_id = v.id
+                        LEFT JOIN citizen c ON v.citizen_id = c.id
+                        WHERE f.status = 'pending'
+                        ORDER BY f.due_date ASC
+                    """)
+                    fines = cur.fetchall()
+                    fines_list = [
+                        f"#{fine['id']} - {format_currency_brl(fine['amount'])} - Venc: {fine['due_date'].strftime('%d/%m/%Y')} - {fine['license_plate'] or 'Veículo não identificado'}"
+                        for fine in fines
+                    ]
+        except:
+            pass
+        
+        # Métodos de pagamento
+        payment_methods = ['Cartão de Crédito', 'Cartão de Débito', 'Dinheiro', 'PIX', 'Boleto', 'Transferência Bancária']
+        
+        # Campos do formulário
+        fields = [
+            ("💰 Multa Pendente", "fine", fines_list),
+            ("💳 Valor a Pagar (R$)", "amount", "0.00"),
+            ("🏦 Método de Pagamento", "payment_method", payment_methods)
+        ]
+        
+        for i, (label, key, placeholder) in enumerate(fields):
+            tk.Label(form_frame, text=label, bg=self.styles.colors['background'],
+                    fg=self.styles.colors['text_primary'], font=self.styles.fonts['normal']).grid(
+                row=i, column=0, sticky='w', pady=5)
+            
+            if key == 'fine':
+                # Combobox para multas
+                combo = ttk.Combobox(form_frame, textvariable=vars[key], values=placeholder, 
+                                   state="readonly", font=self.styles.fonts['normal'])
+                combo.grid(row=i, column=1, pady=5, padx=(10, 0), sticky='ew')
+                combo.bind('<<ComboboxSelected>>', lambda e: update_amount())
+                if placeholder and len(placeholder) > 0:
+                    combo.current(0)
+                    update_amount()  # Atualizar valor inicial
+            elif key == 'payment_method':
+                # Combobox para métodos de pagamento
+                combo = ttk.Combobox(form_frame, textvariable=vars[key], values=placeholder, 
+                                   state="readonly", font=self.styles.fonts['normal'])
+                combo.grid(row=i, column=1, pady=5, padx=(10, 0), sticky='ew')
+                combo.current(0)
+            else:
+                entry = tk.Entry(form_frame, textvariable=vars[key], font=self.styles.fonts['normal'])
+                entry.grid(row=i, column=1, pady=5, padx=(10, 0), sticky='ew')
+                entry.config(state='readonly')  # Valor readonly
+        
+        form_frame.columnconfigure(1, weight=1)
+        
+        def update_amount():
+            """Atualiza o valor quando uma multa é selecionada"""
+            try:
+                fine_info = vars['fine'].get()
+                if fine_info:
+                    # Extrair valor da string: "#1 - R$ 150.00 - Venc: 15/01/2024 - ABC-1234"
+                    parts = fine_info.split(' - ')
+                    if len(parts) >= 2:
+                        amount_str = parts[1].replace('R$ ', '').strip()
+                        vars['amount'].set(amount_str)
+            except:
+                pass
+        
+        # Botões
+        button_frame = tk.Frame(form_frame, bg=self.styles.colors['background'])
+        button_frame.grid(row=len(fields), column=0, columnspan=2, pady=20)
+        
+        def pay_fine():
+            try:
+                # Validar campos obrigatórios
+                if not vars['fine'].get().strip():
+                    messagebox.showerror("Erro", "Selecione uma multa!")
+                    return
+                
+                if not vars['payment_method'].get().strip():
+                    messagebox.showerror("Erro", "Selecione o método de pagamento!")
+                    return
+                
+                # Extrair ID da multa
+                fine_id = int(vars['fine'].get().split('#')[1].split(' -')[0])
+                amount = float(vars['amount'].get())
+                payment_method = vars['payment_method'].get()
+                
+                with psy.connect(self.get_connection_string()) as conn:
+                    with conn.cursor() as cur:
+                        # Verificar se multa ainda está pendente
+                        cur.execute("SELECT status, amount FROM fine WHERE id = %s", (fine_id,))
+                        fine_result = cur.fetchone()
+                        if not fine_result:
+                            messagebox.showerror("Erro", "Multa não encontrada!")
+                            return
+                        
+                        status, db_amount = fine_result
+                        if status != 'pending':
+                            messagebox.showerror("Erro", f"Esta multa já está {status}!")
+                            return
+                        
+                        if abs(amount - float(db_amount)) > 0.01:
+                            messagebox.showerror("Erro", "Valor da multa não confere!")
+                            return
+                        
+                        # Atualizar status da multa
+                        cur.execute("""
+                            UPDATE fine 
+                            SET status = 'paid', updated_at = CURRENT_TIMESTAMP
+                            WHERE id = %s
+                        """, (fine_id,))
+                        
+                        # Inserir registro de pagamento
+                        cur.execute("""
+                            INSERT INTO fine_payment (
+                                fine_id, amount_paid, payment_method
+                            ) VALUES (%s, %s, %s)
+                        """, (
+                            fine_id,
+                            amount,
+                            payment_method
+                        ))
+                        
+                        conn.commit()
+                
+                messagebox.showinfo("Sucesso", "Multa paga com sucesso!")
+                dialog.destroy()
+                self.show_fines()  # Atualizar a lista
+                
+            except Exception as e:
+                messagebox.showerror("Erro", f"Erro ao pagar multa: {str(e)}")
+        
+        tk.Button(button_frame, text="💳 Pagar", command=pay_fine,
+                 bg=self.styles.colors['success'], fg=self.styles.colors['white'],
+                 font=self.styles.fonts['button'], padx=20, pady=8).pack(side=tk.LEFT, padx=5)
+        
+        tk.Button(button_frame, text="❌ Cancelar", command=dialog.destroy,
+                 bg=self.styles.colors['accent'], fg=self.styles.colors['white'],
+                 font=self.styles.fonts['button'], padx=20, pady=8).pack(side=tk.LEFT, padx=5)
         
     def generate_fine_dialog(self):
-        messagebox.showinfo("Em desenvolvimento", "Funcionalidade de gerar multa em desenvolvimento!")
+        """Abre diálogo para gerar multa para um incidente"""
+        dialog = tk.Toplevel(self.root)
+        dialog.title("💰 Gerar Multa")
+        dialog.geometry("500x450")
+        dialog.configure(bg=self.styles.colors['background'])
+        dialog.transient(self.root)
+        dialog.grab_set()
+        
+        # Header
+        header = tk.Frame(dialog, bg=self.styles.colors['secondary'], height=60)
+        header.pack(fill=tk.X)
+        header.pack_propagate(False)
+        
+        title = tk.Label(header, text="💰 Gerar Nova Multa", 
+                        bg=self.styles.colors['secondary'], fg=self.styles.colors['white'],
+                        font=self.styles.fonts['title'])
+        title.pack(expand=True)
+        
+        # Form frame
+        form_frame = tk.Frame(dialog, bg=self.styles.colors['background'])
+        form_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+        
+        # Variáveis
+        vars = {
+            'incident': tk.StringVar(),
+            'amount': tk.StringVar(),
+            'due_date': tk.StringVar()
+        }
+        
+        # Dicionário para guardar dados dos incidentes
+        incidents_data = {}
+        
+        # Carregar incidentes sem multas
+        incidents_list = []
+        
+        try:
+            with psy.connect(self.get_connection_string()) as conn:
+                with conn.cursor(row_factory=dict_row) as cur:
+                    cur.execute("""
+                        SELECT ti.id, ti.location, ti.occurred_at, ti.description,
+                               v.license_plate, c.first_name, c.last_name
+                        FROM traffic_incident ti
+                        LEFT JOIN vehicle v ON ti.vehicle_id = v.id
+                        LEFT JOIN citizen c ON v.citizen_id = c.id
+                        LEFT JOIN fine f ON ti.id = f.traffic_incident_id
+                        WHERE f.id IS NULL
+                        ORDER BY ti.occurred_at DESC
+                    """)
+                    incidents = cur.fetchall()
+                    for inc in incidents:
+                        display_text = f"#{inc['id']} - {inc['license_plate'] or 'Veículo não identificado'} - {inc['location'] or 'Local não informado'} - {inc['occurred_at'].strftime('%d/%m %H:%M')}"
+                        incidents_list.append(display_text)
+                        incidents_data[display_text] = inc
+        except:
+            pass
+        
+        # Campos do formulário
+        fields = [
+            ("⚠️ Incidente", "incident", incidents_list),
+            ("💰 Valor (R$)", "amount", "150.00"),
+            ("📅 Data Vencimento", "due_date", "DD/MM/AAAA")
+        ]
+        
+        for i, (label, key, placeholder) in enumerate(fields):
+            tk.Label(form_frame, text=label, bg=self.styles.colors['background'],
+                    fg=self.styles.colors['text_primary'], font=self.styles.fonts['normal']).grid(
+                row=i, column=0, sticky='w', pady=5)
+            
+            if key == 'incident':
+                # Combobox para incidentes
+                combo = ttk.Combobox(form_frame, textvariable=vars[key], values=incidents_list, 
+                                   state="readonly", font=self.styles.fonts['normal'])
+                combo.grid(row=i, column=1, pady=5, padx=(10, 0), sticky='ew')
+                if incidents_list and len(incidents_list) > 0:
+                    combo.current(0)
+            else:
+                entry = tk.Entry(form_frame, textvariable=vars[key], font=self.styles.fonts['normal'])
+                entry.grid(row=i, column=1, pady=5, padx=(10, 0), sticky='ew')
+        
+        form_frame.columnconfigure(1, weight=1)
+        
+        # Botões
+        button_frame = tk.Frame(form_frame, bg=self.styles.colors['background'])
+        button_frame.grid(row=len(fields), column=0, columnspan=2, pady=20)
+        
+        def save_fine():
+            try:
+                # Validar campos obrigatórios
+                if not vars['incident'].get().strip():
+                    messagebox.showerror("Erro", "Selecione um incidente!")
+                    return
+                
+                if not vars['amount'].get().strip():
+                    messagebox.showerror("Erro", "Preencha o valor da multa!")
+                    return
+                
+                # Validar valor
+                try:
+                    amount = float(vars['amount'].get())
+                    if amount <= 0:
+                        messagebox.showerror("Erro", "Valor deve ser maior que zero!")
+                        return
+                except ValueError:
+                    messagebox.showerror("Erro", "Valor inválido!")
+                    return
+                
+                # Validar data de vencimento
+                try:
+                    from datetime import datetime
+                    due_date = datetime.strptime(vars['due_date'].get(), '%d/%m/%Y').date()
+                    today = datetime.now().date()
+                    
+                    # Buscar data do incidente
+                    incident_id = int(vars['incident'].get().split('#')[1].split(' -')[0])
+                    with psy.connect(self.get_connection_string()) as conn:
+                        with conn.cursor() as cur:
+                            cur.execute("SELECT occurred_at FROM traffic_incident WHERE id = %s", (incident_id,))
+                            incident_result = cur.fetchone()
+                            if incident_result:
+                                incident_date = incident_result['occurred_at'].date()
+                                
+                                # Validar se vencimento é anterior à data do incidente
+                                if due_date < incident_date:
+                                    messagebox.showerror("Erro", "A data de vencimento não pode ser anterior à data do incidente!")
+                                    return
+                                
+                                # Validar se vencimento é muito anterior à data atual
+                                if due_date < today - datetime.timedelta(days=365):
+                                    messagebox.showerror("Erro", "A data de vencimento não pode ser mais de 1 ano no passado!")
+                                    return
+                except ValueError:
+                    messagebox.showerror("Erro", "Data de vencimento inválida! Use o formato DD/MM/AAAA")
+                    return
+                
+                # Extrair ID do incidente
+                incident_id = int(vars['incident'].get().split('#')[1].split(' -')[0])
+                
+                with psy.connect(self.get_connection_string()) as conn:
+                    with conn.cursor() as cur:
+                        # Verificar se incidente já tem multa
+                        cur.execute("SELECT id FROM fine WHERE traffic_incident_id = %s", (incident_id,))
+                        if cur.fetchone():
+                            messagebox.showerror("Erro", "Este incidente já possui uma multa!")
+                            return
+                        
+                        # Inserir multa
+                        cur.execute("""
+                            INSERT INTO fine (
+                                traffic_incident_id, amount, due_date
+                            ) VALUES (%s, %s, %s)
+                        """, (
+                            incident_id,
+                            amount,
+                            due_date
+                        ))
+                        
+                        conn.commit()
+                
+                messagebox.showinfo("Sucesso", "Multa gerada com sucesso!")
+                dialog.destroy()
+                self.show_fines()  # Atualizar a lista
+                
+            except Exception as e:
+                messagebox.showerror("Erro", f"Erro ao gerar multa: {str(e)}")
+        
+        tk.Button(button_frame, text="💾 Gerar Multa", command=save_fine,
+                 bg=self.styles.colors['success'], fg=self.styles.colors['white'],
+                 font=self.styles.fonts['button'], padx=20, pady=8).pack(side=tk.LEFT, padx=5)
+        
+        tk.Button(button_frame, text="❌ Cancelar", command=dialog.destroy,
+                 bg=self.styles.colors['accent'], fg=self.styles.colors['white'],
+                 font=self.styles.fonts['button'], padx=20, pady=8).pack(side=tk.LEFT, padx=5)
         
 def main():
     root = tk.Tk()
