@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, scrolledtext
 import sys
 import os
+import re
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from functions.conect_db import connect_to_db, connection_string
@@ -14,7 +15,6 @@ import pandas as pd
 from tabulate import tabulate
 from dotenv import load_dotenv
 from gui.styles import SmartCityStyles
-import pandas as pd
 
 # Carregar variáveis de ambiente
 load_dotenv()
@@ -40,7 +40,42 @@ def format_currency_brl(value):
     return f"R$ {integer_formatted},{decimal_part:02d}"
 
 class SmartCityOSGUI:
+    """Interface principal do SmartCityOS com design moderno e responsivo"""
+
+    def converter_valor_monetario(self, valor):
+        """Converte valor monetário brasileiro para float de forma robusta"""
+        if not valor:
+            return 0.0
+        
+        try:
+            # Remover símbolos e limpar
+            valor_limpo = str(valor).replace('R$', '').strip()
+            
+            # Substituir vírgula por ponto para decimais brasileiros
+            if ',' in valor_limpo and '.' in valor_limpo:
+                # Formato "1.234,56" → "1234.56"
+                partes = valor_limpo.split('.')
+                if len(partes) == 2:
+                    decimal = partes[1].replace(',', '')
+                    valor_limpo = f"{partes[0]}.{decimal}"
+                else:
+                    valor_limpo = valor_limpo.replace(',', '')
+            else:
+                # Formato "100,00" → "100.00" ou "1.234,56" → "1234.56"
+                valor_limpo = valor_limpo.replace(',', '.')
+            
+            return float(valor_limpo)
+        except (ValueError, AttributeError, TypeError):
+            return 0.0
+
+    def format_currency_brl(self, amount):
+        """Formata valor como moeda brasileira"""
+        if amount is None or amount == 0:
+            return "R$ 0,00"
+        return f"R$ {amount:,.2f}".replace('.', ',')
+    
     def __init__(self, root):
+        """Inicializar interface principal"""
         self.root = root
         self.root.title("SmartCityOS - Sistema Operacional Inteligente para Cidades")
         self.root.geometry("1400x900")
@@ -61,9 +96,11 @@ class SmartCityOSGUI:
         
         # Criar interface
         self.create_widgets()
-        self.check_connection()
-
+        
         self.conection_string = connection_string()
+        
+        # Verificar conexão após criar todos os widgets
+        self.check_connection()
         
     def create_widgets(self):
         # Frame principal
@@ -167,8 +204,7 @@ class SmartCityOSGUI:
         
         # Botões de navegação com estilos melhorados
         buttons_data = [
-            ("📊 Dashboard", self.show_dashboard, "primary"),
-            ("👤 Usuários", self.show_users, "normal"),
+            ("📊 Dashboard", self.show_dashboard, "accent"),
             ("👥 Cidadãos", self.show_citizens, "normal"),
             ("🚗 Veículos", self.show_vehicles, "normal"),
             ("📹 Sensores", self.show_sensors, "normal"),
@@ -221,8 +257,8 @@ class SmartCityOSGUI:
         self.content_frame = ttk.Frame(self.main_frame, padding="10")
         self.content_frame.pack(fill=tk.BOTH, expand=True)
         
-        # Mostrar dashboard inicial
-        self.show_dashboard()
+        # Mostrar mensagem inicial
+        self.show_welcome_message()
         
     def create_status_bar(self, parent):
         status_frame = ttk.Frame(parent)
@@ -303,6 +339,58 @@ class SmartCityOSGUI:
     def clear_content(self):
         for widget in self.content_frame.winfo_children():
             widget.destroy()
+    
+    def show_welcome_message(self):
+        """Mostra mensagem de boas-vindas na tela inicial"""
+        self.clear_content()
+        
+        # Frame de boas-vindas
+        welcome_frame = tk.Frame(self.content_frame, bg=self.styles.colors['background'])
+        welcome_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+        
+        # Container centralizado
+        center_frame = tk.Frame(welcome_frame, bg=self.styles.colors['card'], relief='solid', bd=1)
+        center_frame.pack(expand=True, fill=tk.BOTH, pady=50)
+        
+        # Logo e título
+        logo_label = tk.Label(center_frame, text="🏙️", bg=self.styles.colors['card'],
+                              fg=self.styles.colors['primary'], font=('Segoe UI', 48))
+        logo_label.pack(pady=(30, 10))
+        
+        title_label = tk.Label(center_frame, text="Bem-vindo ao SmartCityOS",
+                              bg=self.styles.colors['card'], fg=self.styles.colors['text_primary'],
+                              font=self.styles.fonts['title'])
+        title_label.pack(pady=(0, 10))
+        
+        subtitle_label = tk.Label(center_frame, text="Sistema Operacional Inteligente para Cidades",
+                                bg=self.styles.colors['card'], fg=self.styles.colors['text_secondary'],
+                                font=self.styles.fonts['normal'])
+        subtitle_label.pack(pady=(0, 30))
+        
+        # Instruções
+        instructions_frame = tk.Frame(center_frame, bg=self.styles.colors['card'])
+        instructions_frame.pack(pady=20, padx=40)
+        
+        instructions = [
+            "🔌 Primeiro, conecte-se ao banco de dados usando o botão no header",
+            "📊 Explore o Dashboard interativo com gráficos Plotly",
+            "👥 Gerencie cidadãos, veículos, sensores e incidentes",
+            "💰 Controle multas e finanças da cidade",
+            "🔍 Use o Console SQL para consultas personalizadas"
+        ]
+        
+        for instruction in instructions:
+            instruction_label = tk.Label(instructions_frame, text=instruction,
+                                       bg=self.styles.colors['card'], fg=self.styles.colors['text_primary'],
+                                       font=self.styles.fonts['normal'], justify='left')
+            instruction_label.pack(anchor='w', pady=2)
+        
+        # Status de conexão
+        status_text = "🟢 Conectado ao banco de dados" if self.connected else "🔴 Desconectado do banco de dados"
+        status_label = tk.Label(center_frame, text=status_text,
+                               bg=self.styles.colors['card'], fg=self.styles.colors['text_secondary'],
+                               font=self.styles.fonts['small'])
+        status_label.pack(pady=(20, 30))
             
     def show_dashboard(self):
         self.clear_content()
@@ -645,11 +733,11 @@ class SmartCityOSGUI:
                     title_label = tk.Label(header_frame, text="👥 Gestão de Cidadãos", 
                                           bg=self.styles.colors['card'], fg=self.styles.colors['text_primary'],
                                           font=self.styles.fonts['title'])
-                    title_label.pack(side=tk.LEFT, padx=20, pady=15)
+                    title_label.pack(side=tk.LEFT, padx=1, pady=15)
                     
                     # Frame de filtros para cidadãos
                     filter_frame = tk.Frame(header_frame, bg=self.styles.colors['card'])
-                    filter_frame.pack(side=tk.RIGHT, padx=20, pady=15)
+                    filter_frame.pack(side=tk.LEFT, padx=20, pady=15)
                     
                     # Filtro por nome
                     tk.Label(filter_frame, text="🔍 Nome:", bg=self.styles.colors['card'], 
@@ -704,6 +792,12 @@ class SmartCityOSGUI:
                                           font=self.styles.fonts['button'], relief='flat',
                                           padx=10, pady=8, cursor='hand2')
                     refresh_btn.pack(side=tk.LEFT, padx=5)
+
+                    delete_btn = tk.Button(filter_frame, text='❌ Excluir', command=self.delete_selected_citizen,
+                                          bg=self.styles.colors['danger'], fg=self.styles.colors['white'],
+                                          font=self.styles.fonts['button'], relief='flat',
+                                          padx=10, pady=8, cursor='hand2')
+                    delete_btn.pack(side=tk.LEFT, padx=5)
                     
                     # Armazenar dados originais para filtros
                     self.all_citizens = citizens
@@ -749,9 +843,13 @@ class SmartCityOSGUI:
         # Filtro por dívida
         debt_filter = self.citizen_debt_var.get()
         if debt_filter == "Com Dívida":
-            filtered_citizens = [c for c in filtered_citizens if c['debt'] and c['debt'] > 0]
+            # Cidadão tem dívida se o campo debt for maior que zero (mantido pelo trigger)
+            filtered_citizens = [c for c in filtered_citizens if c.get('debt', 0) > 0]
         elif debt_filter == "Sem Dívida":
-            filtered_citizens = [c for c in filtered_citizens if not c['debt'] or c['debt'] == 0]
+            # Cidadão não tem dívida se o campo debt for zero ou não existir
+            filtered_citizens = [c for c in filtered_citizens if c.get('debt', 0) == 0]
+        else:  # "Todos"
+            filtered_citizens = filtered_citizens
         
         # Atualizar tabela com dados filtrados
         self.update_citizens_table(filtered_citizens)
@@ -897,14 +995,68 @@ class SmartCityOSGUI:
                 citizen['username'] or 'N/A'
             ))
             
-        # Frame de informações
+        # Frame de informações e ações
         info_frame = tk.Frame(self.content_frame, bg=self.styles.colors['background'])
-        info_frame.pack(fill=tk.X, padx=20, pady=(0, 20))
+        info_frame.pack(fill=tk.X, padx=10, pady=(0, 20))
         
         info_label = tk.Label(info_frame, text=f"👥 {len(citizens)} cidadãos registrados",
                             bg=self.styles.colors['background'], fg=self.styles.colors['text_secondary'],
                             font=self.styles.fonts['small'])
-        info_label.pack(side=tk.LEFT)
+        info_label.pack(side=tk.LEFT, padx=(10, 0))
+        
+        # Botão de excluir cidadão selecionado
+        delete_btn = tk.Button(info_frame, text="🗑️ Excluir Selecionado", command=self.delete_selected_citizen,
+                              bg=self.styles.colors['danger'], fg=self.styles.colors['white'],
+                              font=self.styles.fonts['button'], relief='flat',
+                              padx=10, pady=8, cursor='hand2')
+        delete_btn.pack(side=tk.RIGHT, padx=(0, 10))
+                
+    def delete_selected_citizen(self):
+        """Exclui o cidadão selecionado na tabela"""
+        if not hasattr(self, 'citizens_tree'):
+            messagebox.showwarning("Aviso", "Nenhuma tabela de cidadãos disponível!")
+            return
+            
+        selection = self.citizens_tree.selection()
+        if not selection:
+            messagebox.showwarning("Aviso", "Selecione um cidadão para excluir!")
+            return
+            
+        # Obter dados do cidadão selecionado
+        item = self.citizens_tree.item(selection[0])
+        values = item['values']
+        citizen_id = values[0]
+        citizen_name = values[1]
+        
+        # Confirmar exclusão
+        result = messagebox.askyesno(
+            "Confirmar Exclusão", 
+            f"Tem certeza que deseja excluir o cidadão:\n\n{citizen_name} (ID: {citizen_id})\n\n"
+            "Esta ação não poderá ser desfeita!",
+            icon='warning'
+        )
+        
+        if result:
+            try:
+                with psy.connect(self.get_connection_string()) as conn:
+                    with conn.cursor() as cur:
+                        # Verificar se há multas pendentes
+                        cur.execute("SELECT COUNT(*) FROM fine WHERE citizen_id = %s AND status = 'pending'", (citizen_id,))
+                        pending_fines = cur.fetchone()[0]
+                        
+                        if pending_fines > 0:
+                            messagebox.showerror("Erro", f"Não é possível excluir cidadão com {pending_fines} multa(s) pendente(s)!")
+                            return
+                        
+                        # Excluir cidadão (cascade deve excluir app_user)
+                        cur.execute("DELETE FROM citizen WHERE id = %s", (citizen_id,))
+                        conn.commit()
+                        
+                        messagebox.showinfo("Sucesso", f"Cidadão {citizen_name} excluído com sucesso!")
+                        self.show_citizens()  # Atualizar lista
+                        
+            except Exception as e:
+                messagebox.showerror("Erro", f"Erro ao excluir cidadão: {str(e)}")
                 
     def show_vehicles(self):
         self.clear_content()
@@ -993,6 +1145,12 @@ class SmartCityOSGUI:
                                           font=self.styles.fonts['button'], relief='flat',
                                           padx=10, pady=8, cursor='hand2')
                     refresh_btn.pack(side=tk.LEFT, padx=5)
+
+                    delete_btn = tk.Button(filter_frame, text='❌ Excluir', command=self.delete_selected_vehicle,
+                                          bg=self.styles.colors['danger'], fg=self.styles.colors['white'],
+                                          font=self.styles.fonts['button'], relief='flat',
+                                          padx=10, pady=8, cursor='hand2')
+                    delete_btn.pack(side=tk.LEFT, padx=5)
                     
                     # Armazenar dados originais para filtros
                     self.all_vehicles = vehicles
@@ -1179,14 +1337,64 @@ class SmartCityOSGUI:
                 status
             ))
             
-        # Frame de informações
+        # Frame de informações e ações
         info_frame = tk.Frame(self.content_frame, bg=self.styles.colors['background'])
-        info_frame.pack(fill=tk.X, padx=20, pady=(0, 20))
+        info_frame.pack(fill=tk.X, padx=10, pady=(0, 20))
         
         info_label = tk.Label(info_frame, text=f"🚗 {len(vehicles)} veículos registrados",
                             bg=self.styles.colors['background'], fg=self.styles.colors['text_secondary'],
                             font=self.styles.fonts['small'])
-        info_label.pack(side=tk.LEFT)        
+        info_label.pack(side=tk.LEFT, padx=(10, 0))
+        
+        # Botão de excluir veículo selecionado
+        delete_btn = tk.Button(info_frame, text="🗑️ Excluir Selecionado", command=self.delete_selected_vehicle,
+                              bg=self.styles.colors['danger'], fg=self.styles.colors['white'],
+                              font=self.styles.fonts['button'], relief='flat',
+                              padx=10, pady=8, cursor='hand2')
+        delete_btn.pack(side=tk.RIGHT, padx=(0, 10))        
+                
+    def delete_selected_vehicle(self):
+        """Exclui o veículo selecionado na tabela"""
+        if not hasattr(self, 'vehicles_tree'):
+            messagebox.showwarning("Aviso", "Nenhuma tabela de veículos disponível!")
+            return
+            
+        selection = self.vehicles_tree.selection()
+        if not selection:
+            messagebox.showwarning("Aviso", "Selecione um veículo para excluir!")
+            return
+            
+        # Obter dados do veículo selecionado
+        item = self.vehicles_tree.item(selection[0])
+        values = item['values']
+        vehicle_id = values[0]
+        license_plate = values[1]
+        model = values[2]
+        
+        # Confirmar exclusão
+        result = messagebox.askyesno(
+            "Confirmar Exclusão", 
+            f"Tem certeza que deseja excluir o veículo:\n\n{model} - Placa: {license_plate} (ID: {vehicle_id})\n\n"
+            "Esta ação não poderá ser desfeita!",
+            icon='warning'
+        )
+        
+        if result:
+            try:
+                with psy.connect(self.get_connection_string()) as conn:
+                    with conn.cursor() as cur:
+                        # Verificar se há multas ou incidentes
+                        cur.execute("SELECT COUNT(*) FROM traffic_incident WHERE vehicle_id = %s", (vehicle_id,))
+                                               
+                        # Excluir veículo
+                        cur.execute("DELETE FROM vehicle WHERE id = %s", (vehicle_id,))
+                        conn.commit()
+                        
+                        messagebox.showinfo("Sucesso", f"Veículo {license_plate} excluído com sucesso!")
+                        self.show_vehicles()  # Atualizar lista
+                        
+            except Exception as e:
+                messagebox.showerror("Erro", f"Erro ao excluir veículo: {str(e)}")
         
     def show_sensors(self):
         self.clear_content()
@@ -1276,6 +1484,12 @@ class SmartCityOSGUI:
                                           padx=10, pady=8, cursor='hand2')
                     refresh_btn.pack(side=tk.LEFT, padx=5)
                     
+                    delete_btn = tk.Button(filter_frame, text='❌ Excluir', command=self.delete_selected_sensor,
+                                          bg=self.styles.colors['danger'], fg=self.styles.colors['white'],
+                                          font=self.styles.fonts['button'], relief='flat',
+                                          padx=10, pady=8, cursor='hand2')
+                    delete_btn.pack(side=tk.LEFT, padx=5)
+
                     # Armazenar dados originais para filtros
                     self.all_sensors = sensors
                     
@@ -1388,14 +1602,69 @@ class SmartCityOSGUI:
                 last_reading
             ), tags=(tag,))
             
-        # Informações
+        # Frame de informações e ações
         info_frame = tk.Frame(self.content_frame, bg=self.styles.colors['background'])
-        info_frame.pack(fill=tk.X, padx=20, pady=(0, 20))
+        info_frame.pack(fill=tk.X, padx=10, pady=(0, 20))
         
         info_label = tk.Label(info_frame, text=f"📊 {len(sensors)} sensores cadastrados",
                             bg=self.styles.colors['background'], fg=self.styles.colors['text_secondary'],
                             font=self.styles.fonts['small'])
-        info_label.pack(side=tk.LEFT)
+        info_label.pack(side=tk.LEFT, padx=(10, 0))
+        
+        # Botão de excluir sensor selecionado
+        delete_btn = tk.Button(info_frame, text="🗑️ Excluir Selecionado", command=self.delete_selected_sensor,
+                              bg=self.styles.colors['danger'], fg=self.styles.colors['white'],
+                              font=self.styles.fonts['button'], relief='flat',
+                              padx=10, pady=8, cursor='hand2')
+        delete_btn.pack(side=tk.RIGHT, padx=(0, 10))
+                
+    def delete_selected_sensor(self):
+        """Exclui o sensor selecionado na tabela"""
+        if not hasattr(self, 'sensors_tree'):
+            messagebox.showwarning("Aviso", "Nenhuma tabela de sensores disponível!")
+            return
+            
+        selection = self.sensors_tree.selection()
+        if not selection:
+            messagebox.showwarning("Aviso", "Selecione um sensor para excluir!")
+            return
+            
+        # Obter dados do sensor selecionado
+        item = self.sensors_tree.item(selection[0])
+        values = item['values']
+        sensor_id = values[0]
+        sensor_type = values[1]
+        location = values[2]
+        
+        # Confirmar exclusão
+        result = messagebox.askyesno(
+            "Confirmar Exclusão", 
+            f"Tem certeza que deseja excluir o sensor:\n\n{sensor_type} - {location} (ID: {sensor_id})\n\n"
+            "Esta ação não poderá ser desfeita!",
+            icon='warning'
+        )
+        
+        if result:
+            try:
+                with psy.connect(self.get_connection_string()) as conn:
+                    with conn.cursor() as cur:
+                        # Verificar se há leituras ou incidentes
+                        cur.execute("SELECT COUNT(*) FROM reading WHERE sensor_id = %s", (sensor_id,))
+                        readings = cur.fetchone()[0]
+                        
+                        cur.execute("SELECT COUNT(*) FROM traffic_incident WHERE sensor_id = %s", (sensor_id,))
+                        incidents = cur.fetchone()[0]
+                        
+                                          
+                        # Excluir sensor
+                        cur.execute("DELETE FROM sensor WHERE id = %s", (sensor_id,))
+                        conn.commit()
+                        
+                        messagebox.showinfo("Sucesso", f"Sensor {sensor_type} excluído com sucesso!")
+                        self.show_sensors()  # Atualizar lista
+                        
+            except Exception as e:
+                messagebox.showerror("Erro", f"Erro ao excluir sensor: {str(e)}")
        
     def filter_sensors(self):
         """Filtra sensores baseado nos critérios selecionados"""
@@ -1801,10 +2070,12 @@ class SmartCityOSGUI:
                     cur.execute("""
                         SELECT f.id, f.amount, f.status, f.created_at, f.due_date,
                                ti.location as incident_location, ti.description as incident_description,
-                               v.license_plate
+                               v.license_plate,
+                               c.first_name, c.last_name
                         FROM fine f
                         LEFT JOIN traffic_incident ti ON f.traffic_incident_id = ti.id
                         LEFT JOIN vehicle v ON ti.vehicle_id = v.id
+                        LEFT JOIN citizen c ON f.citizen_id = c.id
                         ORDER BY f.created_at DESC
                     """)
                     fines = cur.fetchall()
@@ -1826,9 +2097,10 @@ class SmartCityOSGUI:
                     tk.Label(button_frame, text="Status:", bg=self.styles.colors['card'], 
                             fg=self.styles.colors['text_secondary'], font=self.styles.fonts['small']).pack(side=tk.LEFT, padx=(0, 5))
                     
+                    # Filtro de status com ttk.Combobox (padrão)
                     self.fine_status_var = tk.StringVar(value="Todos")
                     status_combo = ttk.Combobox(button_frame, textvariable=self.fine_status_var, 
-                                           values=["Todos", "Pendentes", "Pagas", "Vencidas"], width=10, state="readonly")
+                                               values=["Todos", "Pendentes", "Pagas", "Vencidas"], width=10, state="readonly")
                     status_combo.pack(side=tk.LEFT, padx=5)
                     status_combo.bind('<<ComboboxSelected>>', lambda e: self.filter_fines())
                     
@@ -1952,13 +2224,13 @@ class SmartCityOSGUI:
         table_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
         
         # Treeview para multas
-        columns = ('ID', 'Valor', 'Status', 'Data', 'Vencimento', 'Local', 'Descrição', 'Placa')
+        columns = ('ID', 'Valor', 'Status', 'Data', 'Vencimento', 'Local', 'Descrição', 'Placa', 'Cidadão')
         self.fines_tree = ttk.Treeview(table_frame, columns=columns, show='headings', style='Fines.Treeview')
         
         # Configurar colunas
         col_widths = {
             'ID': 50, 'Valor': 80, 'Status': 80, 'Data': 80, 'Vencimento': 80,
-            'Local': 100, 'Descrição': 120, 'Placa': 80
+            'Local': 100, 'Descrição': 120, 'Placa': 80, 'Cidadão': 120
         }
         
         for col in columns:
@@ -2000,6 +2272,11 @@ class SmartCityOSGUI:
                     incident_description = incident_description[:27] + "..."
                 license_plate = fine.get('license_plate', 'N/A')
                 
+                # Formatar nome do cidadão
+                citizen_name = "N/A"
+                if fine.get('first_name') and fine.get('last_name'):
+                    citizen_name = f"{fine['first_name']} {fine['last_name']}"
+                
                 tag = 'Results.Treeview.Even' if i % 2 == 0 else 'Results.Treeview.Odd'
                 self.fines_tree.insert('', tk.END, values=(
                     fine['id'],
@@ -2009,20 +2286,76 @@ class SmartCityOSGUI:
                     due_date,
                     incident_location,
                     incident_description[:30] + '...' if incident_description else 'N/A',
-                    license_plate
+                    license_plate,
+                    citizen_name
                 ), tags=(tag,))
             except Exception as e:
                 print(f"Erro ao processar multa {i}: {e}")
                 continue
             
-        # Informações
+        # Frame de informações e ações
         info_frame = tk.Frame(self.content_frame, bg=self.styles.colors['background'])
-        info_frame.pack(fill=tk.X, padx=20, pady=(0, 20))
+        info_frame.pack(fill=tk.X, padx=10, pady=(0, 20))
         
         info_label = tk.Label(info_frame, text=f"💰 {len(fines)} multas cadastradas",
                             bg=self.styles.colors['background'], fg=self.styles.colors['text_secondary'],
                             font=self.styles.fonts['small'])
-        info_label.pack(side=tk.LEFT)
+        info_label.pack(side=tk.LEFT, padx=(10, 0))
+        
+        # Botão de excluir multa selecionada
+        delete_btn = tk.Button(info_frame, text="🗑️ Excluir Selecionado", command=self.delete_selected_fine,
+                              bg=self.styles.colors['danger'], fg=self.styles.colors['white'],
+                              font=self.styles.fonts['button'], relief='flat',
+                              padx=10, pady=8, cursor='hand2')
+        delete_btn.pack(side=tk.RIGHT, padx=(0, 10))
+                
+    def delete_selected_fine(self):
+        """Exclui a multa selecionada na tabela"""
+        if not hasattr(self, 'fines_tree'):
+            messagebox.showwarning("Aviso", "Nenhuma tabela de multas disponível!")
+            return
+            
+        selection = self.fines_tree.selection()
+        if not selection:
+            messagebox.showwarning("Aviso", "Selecione uma multa para excluir!")
+            return
+            
+        # Obter dados da multa selecionada
+        item = self.fines_tree.item(selection[0])
+        values = item['values']
+        fine_id = values[0]
+        amount = values[1]
+        status = values[2]
+        
+        # Confirmar exclusão
+        result = messagebox.askyesno(
+            "Confirmar Exclusão", 
+            f"Tem certeza que deseja excluir a multa:\n\nID: {fine_id} - Valor: {amount} - Status: {status}\n\n"
+            "Esta ação não poderá ser desfeita!",
+            icon='warning'
+        )
+        
+        if result:
+            try:
+                with psy.connect(self.get_connection_string()) as conn:
+                    with conn.cursor() as cur:
+                        # Verificar se há pagamentos registrados
+                        cur.execute("SELECT COUNT(*) FROM fine_payment WHERE fine_id = %s", (fine_id,))
+                        payments = cur.fetchone()[0]
+                        
+                        if payments > 0:
+                            messagebox.showerror("Erro", f"Não é possível excluir multa com {payments} pagamento(s) registrado(s)!")
+                            return
+                        
+                        # Excluir multa (cascade deve excluir registros relacionados)
+                        cur.execute("DELETE FROM fine WHERE id = %s", (fine_id,))
+                        conn.commit()
+                        
+                        messagebox.showinfo("Sucesso", f"Multa ID: {fine_id} excluída com sucesso!")
+                        self.show_fines()  # Atualizar lista
+                        
+            except Exception as e:
+                messagebox.showerror("Erro", f"Erro ao excluir multa: {str(e)}")
         
     def filter_fines(self):
         """Filtra multas baseado nos critérios selecionados"""
@@ -2039,7 +2372,7 @@ class SmartCityOSGUI:
             filtered_fines = [f for f in filtered_fines if f['status'] == 'paid']
         elif status_filter == "Vencidas":
             from datetime import datetime
-            now = datetime.now()
+            now = datetime.now().date()  # Converter para date
             filtered_fines = [
                 f for f in filtered_fines 
                 if f['due_date'] and f['due_date'] < now and f['status'] != 'paid'
@@ -2049,7 +2382,9 @@ class SmartCityOSGUI:
         amount_filter = self.fine_amount_var.get().strip()
         if amount_filter:
             try:
-                min_amount = float(amount_filter)
+                # Converter valor monetário brasileiro (ex: "100,00") para float
+                amount_clean = amount_filter.replace('R$', '').replace('.', '').replace(',', '.')
+                min_amount = float(amount_clean)
                 filtered_fines = [f for f in filtered_fines if f['amount'] and f['amount'] >= min_amount]
             except ValueError:
                 pass
@@ -2087,9 +2422,10 @@ class SmartCityOSGUI:
                     if f['created_at'] and f['created_at'] >= start_date
                 ]
             elif period_filter == "Vencidas":
+                now_date = now.date()  # Converter para date
                 filtered_fines = [
                     f for f in filtered_fines 
-                    if f['due_date'] and f['due_date'] < now and f['status'] != 'paid'
+                    if f['due_date'] and f['due_date'] < now_date and f['status'] != 'paid'
                 ]
         
         # Atualizar tabela com dados filtrados
@@ -2139,6 +2475,1115 @@ class SmartCityOSGUI:
                         child.config(text=f"💰 {len(fines)} multas registradas ({len(self.all_fines)} total)")
                         break
         
+    def show_dashboard(self):
+        """Dashboard interativo com gráficos inline e exportação Excel"""
+        self.clear_content()
+        
+        if not self.connected:
+            messagebox.showwarning("Aviso", "Conecte-se ao banco de dados primeiro!")
+            return
+        
+        try:
+            # Importar bibliotecas para gráficos inline
+            import plotly.graph_objects as go
+            import plotly.express as px
+            from plotly.subplots import make_subplots
+            import pandas as pd
+            import numpy as np
+            import tempfile
+            import os
+            from PIL import Image, ImageTk
+            
+            # Header estilizado
+            header_frame = tk.Frame(self.content_frame, bg=self.styles.colors['card'])
+            header_frame.pack(fill=tk.X, padx=20, pady=(20, 10))
+            
+            title_label = tk.Label(header_frame, text="📊 Dashboard Interativo", 
+                                  bg=self.styles.colors['card'], fg=self.styles.colors['text_primary'],
+                                  font=self.styles.fonts['title'])
+            title_label.pack(side=tk.LEFT, padx=20, pady=15)
+            
+            # Frame de filtros modernos
+            filters_frame = tk.Frame(header_frame, bg=self.styles.colors['card'])
+            filters_frame.pack(side=tk.RIGHT, padx=20, pady=15)
+            
+            # Filtros dropdown padrão do Tkinter
+            tk.Label(filters_frame, text="Período:", bg=self.styles.colors['card'],
+                    fg=self.styles.colors['text_primary'], font=self.styles.fonts['normal']).pack(side=tk.LEFT, padx=(0, 5))
+            
+            # Criar period_var apenas se não existir
+            if not hasattr(self, 'period_var'):
+                self.period_var = tk.StringVar(value="Últimos 7 dias")
+            
+            period_combo = ttk.Combobox(filters_frame, textvariable=self.period_var, 
+                                      values=["Últimos 7 dias", "Últimos 30 dias", "Últimos 90 dias", "Todo o período"],
+                                      state="readonly", width=15)
+            period_combo.pack(side=tk.LEFT, padx=(0, 10))
+            
+            # Botões de ação
+            refresh_btn = tk.Button(filters_frame, text="🔄 Atualizar", 
+                                  command=lambda: self.update_dashboard(self.period_var.get()),
+                                  bg=self.styles.colors['secondary'], fg=self.styles.colors['white'],
+                                  font=self.styles.fonts['button'], relief='flat',
+                                  padx=15, pady=8, cursor='hand2')
+            refresh_btn.pack(side=tk.LEFT)
+            
+            export_excel_btn = tk.Button(filters_frame, text="📊 Exportar Dados", 
+                                       command=lambda: self.export_dashboard_excel(),
+                                       bg=self.styles.colors['primary'], fg=self.styles.colors['white'],
+                                       font=self.styles.fonts['button'], relief='flat',
+                                       padx=15, pady=8, cursor='hand2')
+            export_excel_btn.pack(side=tk.LEFT, padx=(5, 0))
+            
+            # Botão para abrir versão interativa
+            interactive_btn = tk.Button(filters_frame, text=" Versão Interativa", 
+                                      command=lambda: self.export_dashboard_html(),
+                                      bg=self.styles.colors['secondary'], fg=self.styles.colors['white'],
+                                      font=self.styles.fonts['button'], relief='flat',
+                                      padx=15, pady=8, cursor='hand2')
+            interactive_btn.pack(side=tk.LEFT, padx=(5, 0))
+            
+            # Frame principal para gráficos inline
+            charts_frame = tk.Frame(self.content_frame, bg=self.styles.colors['background'])
+            charts_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+            
+            # Criar gráficos Plotly inline
+            self.create_plotly_charts(charts_frame, self.period_var.get())
+            
+            # Marcar que o dashboard foi inicializado
+            self._dashboard_initialized = True
+            
+        except ImportError as e:
+            messagebox.showerror("Erro", f"Bibliotecas necessárias não encontradas!\n\nInstale:\npip install plotly Pillow ipywidgets xlsxwriter\n\nErro: {str(e)}")
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao carregar dashboard: {str(e)}")
+    
+    def create_plotly_charts(self, parent, period):
+        """Cria gráficos inline com Plotly no Tkinter"""
+        try:
+            import plotly.graph_objects as go
+            import plotly.express as px
+            from plotly.subplots import make_subplots
+            import pandas as pd
+            import numpy as np
+            import tempfile
+            import os
+            from PIL import Image, ImageTk
+            
+            # Converter período em dias para o SQL
+            period_days = {
+                "Últimos 7 dias": 7,
+                "Últimos 30 dias": 30,
+                "Últimos 90 dias": 90,
+                "Todo o período": 365  # Aproximadamente 1 ano
+            }
+            
+            days = period_days.get(period, 30)
+            
+            # Carregar dados do banco com filtro de período
+            with psy.connect(self.get_connection_string()) as conn:
+                with conn.cursor(row_factory=dict_row) as cur:
+                    
+                    # Dados para gráficos
+                    data = {}
+                    
+                    # 1. Evolução de incidentes (com filtro de período específico)
+                    if days == 7:
+                        cur.execute("""
+                            SELECT DATE(occurred_at) as date, COUNT(*) as incidents
+                            FROM traffic_incident 
+                            WHERE occurred_at >= CURRENT_DATE - INTERVAL '7 days'
+                            GROUP BY DATE(occurred_at)
+                            ORDER BY date
+                        """)
+                    elif days == 30:
+                        cur.execute("""
+                            SELECT DATE(occurred_at) as date, COUNT(*) as incidents
+                            FROM traffic_incident 
+                            WHERE occurred_at >= CURRENT_DATE - INTERVAL '30 days'
+                            GROUP BY DATE(occurred_at)
+                            ORDER BY date
+                        """)
+                    elif days == 90:
+                        cur.execute("""
+                            SELECT DATE(occurred_at) as date, COUNT(*) as incidents
+                            FROM traffic_incident 
+                            WHERE occurred_at >= CURRENT_DATE - INTERVAL '90 days'
+                            GROUP BY DATE(occurred_at)
+                            ORDER BY date
+                        """)
+                    else:  # Todo o período
+                        cur.execute("""
+                            SELECT DATE_TRUNC('month', occurred_at) as date, COUNT(*) as incidents
+                            FROM traffic_incident 
+                            GROUP BY DATE_TRUNC('month', occurred_at)
+                            ORDER BY date
+                        """)
+                    incident_timeline = cur.fetchall()
+                    data['incident_timeline'] = incident_timeline
+                    
+                    # 2. Multas por status (com filtro de período específico)
+                    if days == 7:
+                        cur.execute("""
+                            SELECT status, COUNT(*) as count, COALESCE(SUM(amount), 0) as total_amount
+                            FROM fine 
+                            WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'
+                            GROUP BY status
+                        """)
+                    elif days == 30:
+                        cur.execute("""
+                            SELECT status, COUNT(*) as count, COALESCE(SUM(amount), 0) as total_amount
+                            FROM fine 
+                            WHERE created_at >= CURRENT_DATE - INTERVAL '30 days'
+                            GROUP BY status
+                        """)
+                    elif days == 90:
+                        cur.execute("""
+                            SELECT status, COUNT(*) as count, COALESCE(SUM(amount), 0) as total_amount
+                            FROM fine 
+                            WHERE created_at >= CURRENT_DATE - INTERVAL '90 days'
+                            GROUP BY status
+                        """)
+                    else:  # Todo o período
+                        cur.execute("""
+                            SELECT status, COUNT(*) as count, COALESCE(SUM(amount), 0) as total_amount
+                            FROM fine 
+                            GROUP BY status
+                        """)
+                    fines_by_status = cur.fetchall()
+                    data['fines_by_status'] = fines_by_status
+                    
+                    # 3. Veículos por status (com filtro de período específico)
+                    if days == 7:
+                        cur.execute("""
+                            SELECT CASE WHEN allowed = TRUE THEN 'Ativos' ELSE 'Bloqueados' END as status, 
+                                   COUNT(*) as count
+                            FROM vehicle 
+                            WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'
+                            GROUP BY allowed
+                        """)
+                    elif days == 30:
+                        cur.execute("""
+                            SELECT CASE WHEN allowed = TRUE THEN 'Ativos' ELSE 'Bloqueados' END as status, 
+                                   COUNT(*) as count
+                            FROM vehicle 
+                            WHERE created_at >= CURRENT_DATE - INTERVAL '30 days'
+                            GROUP BY allowed
+                        """)
+                    elif days == 90:
+                        cur.execute("""
+                            SELECT CASE WHEN allowed = TRUE THEN 'Ativos' ELSE 'Bloqueados' END as status, 
+                                   COUNT(*) as count
+                            FROM vehicle 
+                            WHERE created_at >= CURRENT_DATE - INTERVAL '90 days'
+                            GROUP BY allowed
+                        """)
+                    else:  # Todo o período
+                        cur.execute("""
+                            SELECT CASE WHEN allowed = TRUE THEN 'Ativos' ELSE 'Bloqueados' END as status, 
+                                   COUNT(*) as count
+                            FROM vehicle 
+                            GROUP BY allowed
+                        """)
+                    vehicles_by_status = cur.fetchall()
+                    data['vehicles_by_status'] = vehicles_by_status
+                    
+                    # 4. Sensores por tipo (com filtro de período específico)
+                    if days == 7:
+                        cur.execute("""
+                            SELECT type, COUNT(*) as count, 
+                                   COUNT(CASE WHEN active = TRUE THEN 1 END) as active
+                            FROM sensor 
+                            WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'
+                            GROUP BY type
+                            ORDER BY count DESC
+                        """)
+                    elif days == 30:
+                        cur.execute("""
+                            SELECT type, COUNT(*) as count, 
+                                   COUNT(CASE WHEN active = TRUE THEN 1 END) as active
+                            FROM sensor 
+                            WHERE created_at >= CURRENT_DATE - INTERVAL '30 days'
+                            GROUP BY type
+                            ORDER BY count DESC
+                        """)
+                    elif days == 90:
+                        cur.execute("""
+                            SELECT type, COUNT(*) as count, 
+                                   COUNT(CASE WHEN active = TRUE THEN 1 END) as active
+                            FROM sensor 
+                            WHERE created_at >= CURRENT_DATE - INTERVAL '90 days'
+                            GROUP BY type
+                            ORDER BY count DESC
+                        """)
+                    else:  # Todo o período
+                        cur.execute("""
+                            SELECT type, COUNT(*) as count, 
+                                   COUNT(CASE WHEN active = TRUE THEN 1 END) as active
+                            FROM sensor 
+                            GROUP BY type
+                            ORDER BY count DESC
+                        """)
+                    sensors_by_type = cur.fetchall()
+                    data['sensors_by_type'] = sensors_by_type
+                    
+                    # 5. Crescimento de usuários (com filtro de período específico)
+                    if days == 7:
+                        cur.execute("""
+                            SELECT DATE_TRUNC('day', created_at) as date, COUNT(*) as new_users
+                            FROM app_user 
+                            WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'
+                            GROUP BY DATE_TRUNC('day', created_at)
+                            ORDER BY date
+                        """)
+                    elif days == 30:
+                        cur.execute("""
+                            SELECT DATE_TRUNC('day', created_at) as date, COUNT(*) as new_users
+                            FROM app_user 
+                            WHERE created_at >= CURRENT_DATE - INTERVAL '30 days'
+                            GROUP BY DATE_TRUNC('day', created_at)
+                            ORDER BY date
+                        """)
+                    elif days == 90:
+                        cur.execute("""
+                            SELECT DATE_TRUNC('day', created_at) as date, COUNT(*) as new_users
+                            FROM app_user 
+                            WHERE created_at >= CURRENT_DATE - INTERVAL '90 days'
+                            GROUP BY DATE_TRUNC('day', created_at)
+                            ORDER BY date
+                        """)
+                    else:  # Todo o período
+                        cur.execute("""
+                            SELECT DATE_TRUNC('month', created_at) as date, COUNT(*) as new_users
+                            FROM app_user 
+                            WHERE created_at >= CURRENT_DATE - INTERVAL '1 year'
+                            GROUP BY DATE_TRUNC('month', created_at)
+                            ORDER BY date
+                        """)
+                    user_growth = cur.fetchall()
+                    data['user_growth'] = user_growth
+            
+            # Criar subplots Plotly
+            fig = make_subplots(
+                rows=3, cols=2,
+                subplot_titles=(f'Incidentes ({period})', f'Multas por Status ({period})', 
+                                f'Veículos por Status ({period})', f'Sensores por Tipo ({period})',
+                                f'Crescimento de Usuários ({period})', f'Resumo Financeiro ({period})'),
+                specs=[[{"secondary_y": False}, {"type": "pie"}],
+                       [{"secondary_y": False}, {"type": "bar"}],
+                       [{"secondary_y": False}, {"type": "indicator"}]],
+                vertical_spacing=0.08,
+                horizontal_spacing=0.05
+            )
+            
+            # 1. Gráfico de linha - Incidentes
+            if data['incident_timeline']:
+                df_incidents = pd.DataFrame(data['incident_timeline'])
+                df_incidents['incidents'] = df_incidents['incidents'].astype(int)
+                df_incidents['date'] = pd.to_datetime(df_incidents['date']).dt.strftime('%Y-%m-%d')
+                
+                fig.add_trace(
+                    go.Scatter(x=df_incidents['date'], y=df_incidents['incidents'],
+                              mode='lines+markers', name='Incidentes',
+                              line=dict(color='#FF6B6B', width=3),
+                              marker=dict(size=8)),
+                    row=1, col=1
+                )
+            
+            # 2. Gráfico de pizza - Multas por status
+            if data['fines_by_status']:
+                df_fines = pd.DataFrame(data['fines_by_status'])
+                status_map = {'pending': 'Pendentes', 'paid': 'Pagas', 'overdue': 'Vencidas', 'cancelled': 'Canceladas'}
+                df_fines['status_display'] = df_fines['status'].map(status_map)
+                df_fines['count'] = df_fines['count'].astype(int)
+                
+                fig.add_trace(
+                    go.Pie(labels=df_fines['status_display'], values=df_fines['count'],
+                           name="Multas", hole=0.4,
+                           marker_colors=['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4']),
+                    row=1, col=2
+                )
+            
+            # 3. Gráfico de barras - Veículos
+            if data['vehicles_by_status']:
+                df_vehicles = pd.DataFrame(data['vehicles_by_status'])
+                df_vehicles['count'] = df_vehicles['count'].astype(int)
+                
+                fig.add_trace(
+                    go.Bar(x=df_vehicles['status'], y=df_vehicles['count'],
+                           name='Veículos', marker_color='#4ECDC4'),
+                    row=2, col=1
+                )
+            
+            # 4. Gráfico de barras horizontais - Sensores
+            if data['sensors_by_type']:
+                df_sensors = pd.DataFrame(data['sensors_by_type'])
+                df_sensors['count'] = df_sensors['count'].astype(int)
+                
+                fig.add_trace(
+                    go.Bar(y=df_sensors['type'], x=df_sensors['count'],
+                           name='Sensores', orientation='h',
+                           marker_color='#45B7D1'),
+                    row=2, col=2
+                )
+            
+            # 5. Gráfico de linha - Crescimento de usuários
+            if data['user_growth']:
+                df_users = pd.DataFrame(data['user_growth'])
+                df_users['new_users'] = df_users['new_users'].astype(int)
+                df_users['date'] = pd.to_datetime(df_users['date']).dt.strftime('%Y-%m-%d')
+                
+                fig.add_trace(
+                    go.Scatter(x=df_users['date'], y=df_users['new_users'],
+                              mode='lines+markers', name='Usuários',
+                              line=dict(color='#FFA07A', width=3),
+                              marker=dict(size=8)),
+                    row=3, col=1
+                )
+            
+            # 6. Indicador financeiro
+            if data['fines_by_status']:
+                df_fines = pd.DataFrame(data['fines_by_status'])
+                df_fines['total_amount'] = pd.to_numeric(df_fines['total_amount'], errors='coerce').fillna(0).astype(float)
+                
+                total_amount = float(df_fines['total_amount'].sum())
+                pending_amount = float(df_fines[df_fines['status'] == 'pending']['total_amount'].sum() if len(df_fines[df_fines['status'] == 'pending']) > 0 else 0)
+                
+                fig.add_trace(
+                    go.Indicator(
+                        mode="number+gauge+delta",
+                        value=total_amount,
+                        domain={'x': [0, 1], 'y': [0, 1]},
+                        title={'text': "Valor Total de Multas"},
+                        delta={'reference': pending_amount},
+                        gauge={
+                            'axis': {'range': [None, total_amount * 1.2] if total_amount > 0 else [0, 100]},
+                            'bar': {'color': "#FF6B6B"},
+                            'steps': [
+                                {'range': [0, total_amount * 0.5] if total_amount > 0 else [0, 50], 'color': "lightgray"},
+                                {'range': [total_amount * 0.5, total_amount] if total_amount > 0 else [50, 100], 'color': "gray"}
+                            ],
+                            'threshold': {
+                                'line': {'color': "red", 'width': 4},
+                                'thickness': 0.75,
+                                'value': (total_amount * 0.9) if total_amount > 0 else 90
+                            }
+                        }
+                    ),
+                    row=3, col=2
+                )
+            
+            # Layout do gráfico
+            fig.update_layout(
+                title_text=f"📊 SmartCityOS - Dashboard Interativo<br>Período: {period}",
+                title_x=0.5,
+                title_font_size=20,
+                height=1200,
+                showlegend=True,
+                template="plotly_white",
+                font=dict(size=10)
+            )
+            
+            # Converter para imagem e exibir no Tkinter
+            try:
+                # Salvar como imagem temporária com nome único
+                import uuid
+                unique_id = str(uuid.uuid4())[:8]
+                temp_filename = f"dashboard_{unique_id}.png"
+                temp_path = os.path.join(tempfile.gettempdir(), temp_filename)
+                
+                # Salvar imagem
+                fig.write_image(temp_path, width=1200, height=800, scale=2)
+                
+                # Carregar imagem
+                img = Image.open(temp_path)
+                img = img.resize((500, 333), Image.Resampling.LANCZOS)
+                
+                # Converter para PhotoImage
+                photo = ImageTk.PhotoImage(img)
+                
+                # Exibir no Tkinter
+                img_label = tk.Label(parent, image=photo, bg=self.styles.colors['background'])
+                img_label.image = photo  # Manter referência para não ser coletado pelo GC
+                img_label.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+                
+                # Adicionar botão para abrir versão interativa
+                interactive_frame = tk.Frame(parent, bg=self.styles.colors['background'])
+                interactive_frame.pack(fill=tk.X, pady=(0, 10))
+                
+                # interactive_btn = tk.Button(interactive_frame, 
+                #                          text="🌐 Abrir Versão Interativa (Navegador)",
+                #                          command=lambda: self.open_interactive_dashboard(),
+                #                          bg=self.styles.colors['primary'], 
+                #                          fg=self.styles.colors['white'],
+                #                          font=self.styles.fonts['button'], 
+                #                          relief='flat',
+                #                          padx=20, pady=10, cursor='hand2')
+                # interactive_btn.pack()
+                
+                # Armazenar caminho para limpeza posterior
+                if not hasattr(self, 'temp_files'):
+                    self.temp_files = []
+                self.temp_files.append(temp_path)
+                
+                # Limpar arquivos antigos periodicamente
+                self.cleanup_temp_files()
+                
+            except Exception as img_error:
+                print(f"Erro ao converter imagem: {img_error}")
+                # Fallback: mostrar botão para abrir no navegador
+                fallback_frame = tk.Frame(parent, bg=self.styles.colors['card'])
+                fallback_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+                
+                tk.Label(fallback_frame, 
+                        text="📊 Dashboard Plotly Criado!\n\n" +
+                             "Clique abaixo para abrir a versão interativa no navegador.\n" +
+                             "Você poderá usar zoom, hover e filtros interativos.",
+                        bg=self.styles.colors['card'], fg=self.styles.colors['text_primary'],
+                        font=self.styles.fonts['normal'], justify='center').pack(expand=True)
+                
+                interactive_btn = tk.Button(fallback_frame, 
+                                         text="🌐 Abrir Dashboard Interativo",
+                                         command=lambda: self.open_interactive_dashboard(),
+                                         bg=self.styles.colors['primary'], 
+                                         fg=self.styles.colors['white'],
+                                         font=self.styles.fonts['button'], 
+                                         relief='flat',
+                                         padx=20, pady=10, cursor='hand2')
+                interactive_btn.pack(pady=20)
+            
+            # Armazenar figura e dados para exportação
+            self.current_figure = fig
+            self.current_data = data
+            
+        except Exception as e:
+            print(f"Erro no display_dashboard: {e}")
+            import traceback
+            print(f"Traceback completo: {traceback.format_exc()}")
+
+
+    def cleanup_temp_files(self):
+        """Limpa arquivos temporários antigos"""
+        try:
+            import os
+            import glob
+            import tempfile
+            
+            # Manter apenas os arquivos mais recentes
+            temp_pattern = os.path.join(tempfile.gettempdir(), "dashboard_*.png")
+            existing_files = glob.glob(temp_pattern)
+            
+            # Se tiver mais de 5 arquivos, remover os mais antigos
+            if len(existing_files) > 5:
+                existing_files.sort(key=os.path.getctime)
+                for old_file in existing_files[:-5]:  # Manter os 5 mais recentes
+                    try:
+                        os.unlink(old_file)
+                    except:
+                        pass  # Ignorar erros ao remover
+                        
+        except Exception as e:
+            print(f"Erro ao limpar arquivos temporários: {e}")
+    
+    def open_interactive_dashboard(self):
+        """Abre o dashboard interativo no navegador"""
+        try:
+            import tempfile
+            import webbrowser
+            
+            if not hasattr(self, 'current_figure'):
+                messagebox.showwarning("Aviso", "Nenhum dashboard para exibir!")
+                return
+            
+            # Salvar como HTML temporário
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False) as tmp_file:
+                self.current_figure.write_html(tmp_file.name, include_plotlyjs='cdn')
+                
+                # Abrir no navegador
+                webbrowser.open(f'file://{tmp_file.name}')
+                
+                messagebox.showinfo("Sucesso", "Dashboard interativo aberto no navegador!")
+                
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao abrir dashboard interativo: {str(e)}")
+    
+    def export_dashboard_excel(self):
+        """Exporta dashboard para Excel com dados brutos"""
+        try:
+            import pandas as pd
+            from tkinter import filedialog
+            
+            if not hasattr(self, 'current_data'):
+                messagebox.showwarning("Aviso", "Nenhum dado para exportar. Gere o dashboard primeiro!")
+                return
+            
+            # File dialog para salvar
+            file_path = filedialog.asksaveasfilename(
+                title="Exportar Dados para Excel",
+                defaultextension=".xlsx",
+                filetypes=[("Arquivo Excel (*.xlsx)", "*.xlsx"), ("Todos os Arquivos", "*.*")],
+                initialfile=f"dados_smartcity_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+            )
+            
+            if not file_path:
+                return
+            
+            # Criar Excel writer
+            with pd.ExcelWriter(file_path, engine='xlsxwriter') as writer:
+                # 1. Incidentes
+                if self.current_data.get('incident_timeline'):
+                    df_incidents = pd.DataFrame(self.current_data['incident_timeline'])
+                    df_incidents.to_excel(writer, sheet_name='Incidentes', index=False)
+                
+                # 2. Multas
+                if self.current_data.get('fines_by_status'):
+                    df_fines = pd.DataFrame(self.current_data['fines_by_status'])
+                    df_fines.to_excel(writer, sheet_name='Multas', index=False)
+                
+                # 3. Veículos
+                if self.current_data.get('vehicles_by_status'):
+                    df_vehicles = pd.DataFrame(self.current_data['vehicles_by_status'])
+                    df_vehicles.to_excel(writer, sheet_name='Veículos', index=False)
+                
+                # 4. Sensores
+                if self.current_data.get('sensors_by_type'):
+                    df_sensors = pd.DataFrame(self.current_data['sensors_by_type'])
+                    df_sensors.to_excel(writer, sheet_name='Sensores', index=False)
+                
+                # 5. Usuários
+                if self.current_data.get('user_growth'):
+                    df_users = pd.DataFrame(self.current_data['user_growth'])
+                    df_users.to_excel(writer, sheet_name='Usuários', index=False)
+                
+                # 6. Resumo
+                summary_data = {
+                    'Métrica': ['Total de Incidentes', 'Total de Multas', 'Total de Veículos', 'Total de Sensores', 'Total de Usuários'],
+                    'Quantidade': [
+                        len(self.current_data.get('incident_timeline', [])),
+                        len(self.current_data.get('fines_by_status', [])),
+                        len(self.current_data.get('vehicles_by_status', [])),
+                        len(self.current_data.get('sensors_by_type', [])),
+                        len(self.current_data.get('user_growth', []))
+                    ]
+                }
+                df_summary = pd.DataFrame(summary_data)
+                df_summary.to_excel(writer, sheet_name='Resumo', index=False)
+            
+            messagebox.showinfo("Sucesso", f"Dados exportados para Excel:\n{file_path}")
+            
+        except ImportError:
+            messagebox.showerror("Erro", "Bibliotecas necessárias não encontradas!\n\nInstale:\npip install xlsxwriter")
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao exportar Excel: {str(e)}")
+    
+    def export_dashboard_html(self):
+        """Exporta dashboard para HTML com Plotly"""
+        try:
+            import tempfile
+            import webbrowser
+            from tkinter import filedialog
+            
+            if not hasattr(self, 'current_figure'):
+                messagebox.showwarning("Aviso", "Nenhum dashboard para exportar. Gere o dashboard primeiro!")
+                return
+            
+            # File dialog para salvar
+            file_path = filedialog.asksaveasfilename(
+                title="Exportar Dashboard para HTML",
+                defaultextension=".html",
+                filetypes=[("Arquivo HTML (*.html)", "*.html"), ("Todos os Arquivos", "*.*")],
+                initialfile=f"dashboard_smartcity_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
+            )
+            
+            if not file_path:
+                return
+            
+            # Usar a figura já criada em create_plotly_charts
+            self.current_figure.write_html(file_path, include_plotlyjs='cdn')
+            
+            messagebox.showinfo("Sucesso", f"Dashboard exportado para HTML:\n{file_path}")
+            
+            # Perguntar se quer abrir no navegador
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao exportar HTML: {str(e)}")
+    
+    def create_interactive_charts(self, parent, period, chart_type):
+        """Cria gráficos interativos com Plotly"""
+        try:
+            import plotly.graph_objects as go
+            import plotly.express as px
+            from plotly.subplots import make_subplots
+            import pandas as pd
+            import webbrowser
+            import tempfile
+            import os
+            
+            # Carregar dados do banco
+            with psy.connect(self.get_connection_string()) as conn:
+                with conn.cursor(row_factory=dict_row) as cur:
+                    
+                    # Dados para gráficos
+                    data = {}
+                    
+                    # 1. Evolução de incidentes (linha temporal)
+                    cur.execute("""
+                        SELECT DATE(occurred_at) as date, COUNT(*) as incidents
+                        FROM traffic_incident 
+                        WHERE occurred_at >= CURRENT_DATE - INTERVAL '30 days'
+                        GROUP BY DATE(occurred_at)
+                        ORDER BY date
+                    """)
+                    incident_timeline = cur.fetchall()
+                    data['incident_timeline'] = incident_timeline
+                    
+                    # 2. Multas por status (pizza)
+                    cur.execute("""
+                        SELECT status, COUNT(*) as count, COALESCE(SUM(amount), 0) as total_amount
+                        FROM fine 
+                        GROUP BY status
+                    """)
+                    fines_by_status = cur.fetchall()
+                    data['fines_by_status'] = fines_by_status
+                    
+                    # 3. Veículos por status (barras)
+                    cur.execute("""
+                        SELECT CASE WHEN allowed = TRUE THEN 'Ativos' ELSE 'Bloqueados' END as status, 
+                               COUNT(*) as count
+                        FROM vehicle 
+                        GROUP BY allowed
+                    """)
+                    vehicles_by_status = cur.fetchall()
+                    data['vehicles_by_status'] = vehicles_by_status
+                    
+                    # 4. Sensores por tipo (barras horizontais)
+                    cur.execute("""
+                        SELECT type, COUNT(*) as count, 
+                               COUNT(CASE WHEN active = TRUE THEN 1 END) as active
+                        FROM sensor 
+                        GROUP BY type
+                        ORDER BY count DESC
+                    """)
+                    sensors_by_type = cur.fetchall()
+                    data['sensors_by_type'] = sensors_by_type
+                    
+                    # 5. Crescimento de usuários (linha)
+                    cur.execute("""
+                        SELECT DATE_TRUNC('month', created_at) as month, COUNT(*) as new_users
+                        FROM app_user 
+                        WHERE created_at >= CURRENT_DATE - INTERVAL '12 months'
+                        GROUP BY DATE_TRUNC('month', created_at)
+                        ORDER BY month
+                    """)
+                    user_growth = cur.fetchall()
+                    data['user_growth'] = user_growth
+            
+            # Criar subplots
+            fig = make_subplots(
+                rows=3, cols=2,
+                subplot_titles=('Incidentes (Últimos 30 dias)', 'Multas por Status', 
+                                'Veículos por Status', 'Sensores por Tipo',
+                                'Crescimento de Usuários', 'Resumo Financeiro'),
+                specs=[[{"secondary_y": False}, {"type": "pie"}],
+                       [{"secondary_y": False}, {"type": "bar"}],
+                       [{"secondary_y": False}, {"type": "indicator"}]],
+                vertical_spacing=0.08,
+                horizontal_spacing=0.05
+            )
+            
+            # 1. Gráfico de linha - Incidentes
+            if data['incident_timeline']:
+                df_incidents = pd.DataFrame(data['incident_timeline'])
+                # Converter para tipos compatíveis com Plotly
+                df_incidents['incidents'] = df_incidents['incidents'].astype(int)
+                df_incidents['date'] = pd.to_datetime(df_incidents['date']).dt.strftime('%Y-%m-%d')
+                
+                fig.add_trace(
+                    go.Scatter(x=df_incidents['date'], y=df_incidents['incidents'],
+                              mode='lines+markers', name='Incidentes',
+                              line=dict(color='#FF6B6B', width=3),
+                              marker=dict(size=8)),
+                    row=1, col=1
+                )
+            
+            # 2. Gráfico de pizza - Multas por status
+            if data['fines_by_status']:
+                df_fines = pd.DataFrame(data['fines_by_status'])
+                status_map = {'pending': 'Pendentes', 'paid': 'Pagas', 'overdue': 'Vencidas', 'cancelled': 'Canceladas'}
+                df_fines['status_display'] = df_fines['status'].map(status_map)
+                # Converter para tipos compatíveis
+                df_fines['count'] = df_fines['count'].astype(int)
+                df_fines['total_amount'] = pd.to_numeric(df_fines['total_amount'], errors='coerce').fillna(0).astype(float)
+                
+                fig.add_trace(
+                    go.Pie(labels=df_fines['status_display'], values=df_fines['count'],
+                           name="Multas", hole=0.4,
+                           marker_colors=['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4']),
+                    row=1, col=2
+                )
+            
+            # 3. Gráfico de barras - Veículos
+            if data['vehicles_by_status']:
+                df_vehicles = pd.DataFrame(data['vehicles_by_status'])
+                # Converter para tipos compatíveis
+                df_vehicles['count'] = df_vehicles['count'].astype(int)
+                
+                fig.add_trace(
+                    go.Bar(x=df_vehicles['status'], y=df_vehicles['count'],
+                           name='Veículos', marker_color='#4ECDC4'),
+                    row=2, col=1
+                )
+            
+            # 4. Gráfico de barras horizontais - Sensores
+            if data['sensors_by_type']:
+                df_sensors = pd.DataFrame(data['sensors_by_type'])
+                # Converter para tipos compatíveis
+                df_sensors['count'] = df_sensors['count'].astype(int)
+                df_sensors['active'] = df_sensors['active'].astype(int)
+                
+                fig.add_trace(
+                    go.Bar(y=df_sensors['type'], x=df_sensors['count'],
+                           name='Sensores', orientation='h',
+                           marker_color='#45B7D1'),
+                    row=2, col=2
+                )
+            
+            # 5. Gráfico de linha - Crescimento de usuários
+            if data['user_growth']:
+                df_users = pd.DataFrame(data['user_growth'])
+                # Converter para tipos compatíveis
+                df_users['new_users'] = df_users['new_users'].astype(int)
+                df_users['month'] = pd.to_datetime(df_users['month']).dt.strftime('%Y-%m-%d')
+                
+                fig.add_trace(
+                    go.Scatter(x=df_users['month'], y=df_users['new_users'],
+                              mode='lines+markers', name='Novos Usuários',
+                              line=dict(color='#96CEB4', width=3),
+                              marker=dict(size=8)),
+                    row=3, col=1
+                )
+            
+            # 6. Indicador financeiro
+            if data['fines_by_status']:
+                df_fines = pd.DataFrame(data['fines_by_status'])
+                # Converter para tipos compatíveis
+                df_fines['total_amount'] = pd.to_numeric(df_fines['total_amount'], errors='coerce').fillna(0).astype(float)
+                
+                total_amount = float(df_fines['total_amount'].sum())
+                pending_amount = float(df_fines[df_fines['status'] == 'pending']['total_amount'].sum() if len(df_fines[df_fines['status'] == 'pending']) > 0 else 0)
+                
+                fig.add_trace(
+                    go.Indicator(
+                        mode="number+gauge+delta",
+                        value=total_amount,
+                        domain={'x': [0, 1], 'y': [0, 1]},
+                        title={'text': "Valor Total de Multas"},
+                        delta={'reference': pending_amount},
+                        gauge={
+                            'axis': {'range': [None, total_amount * 1.2]},
+                            'bar': {'color': "#FF6B6B"},
+                            'steps': [
+                                {'range': [0, total_amount * 0.5], 'color': "lightgray"},
+                                {'range': [total_amount * 0.5, total_amount], 'color': "gray"}
+                            ],
+                            'threshold': {
+                                'line': {'color': "red", 'width': 4},
+                                'thickness': 0.75,
+                                'value': total_amount * 0.9
+                            }
+                        }
+                    ),
+                    row=3, col=2
+                )
+            
+            # Layout do gráfico
+            fig.update_layout(
+                title_text="📊 SmartCityOS - Dashboard Interativo",
+                title_x=0.5,
+                title_font_size=20,
+                height=1200,
+                showlegend=True,
+                template="plotly_white"
+            )
+            
+            # Salvar gráfico em arquivo HTML temporário
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False) as f:
+                fig.write_html(f.name, include_plotlyjs='cdn')
+                temp_file = f.name
+            
+            # Abrir no navegador diretamente
+            import webbrowser
+            webbrowser.open(f'file://{temp_file}')
+            
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao criar gráficos: {str(e)}")
+    
+    def display_plotly_chart(self, html_file, parent):
+        """Exibe gráfico Plotly no Tkinter"""
+        try:
+            import webbrowser
+            
+            # Frame para o gráfico
+            chart_frame = tk.Frame(parent, bg=self.styles.colors['card'], relief='solid', bd=1)
+            chart_frame.pack(fill=tk.BOTH, expand=True, pady=10)
+            
+            # Botão para abrir no navegador
+            open_btn = tk.Button(chart_frame, text="🌐 Abrir no Navegador (Interativo)",
+                               command=lambda: webbrowser.open(f'file://{html_file}'),
+                               bg=self.styles.colors['primary'], fg=self.styles.colors['white'],
+                               font=self.styles.fonts['button'], relief='flat',
+                               padx=20, pady=10, cursor='hand2')
+            open_btn.pack(pady=10)
+            
+            # Label informativo
+            info_label = tk.Label(chart_frame, 
+                                text="📈 Gráficos interativos criados com Plotly!\n" +
+                                     "Clique no botão acima para abrir no navegador com zoom, filtros e animações.",
+                                bg=self.styles.colors['card'], fg=self.styles.colors['text_primary'],
+                                font=self.styles.fonts['normal'], justify='center')
+            info_label.pack(pady=10)
+            
+            # Preview estático (simples)
+            preview_label = tk.Label(chart_frame, 
+                                    text="📊 Dashboard com 6 gráficos interativos:\n" +
+                                    "• Incidentes (linha temporal)\n" +
+                                    "• Multas por status (pizza)\n" +
+                                    "• Veículos por status (barras)\n" +
+                                    "• Sensores por tipo (barras horizontais)\n" +
+                                    "• Crescimento de usuários (linha)\n" +
+                                    "• Indicador financeiro (gauge)",
+                                    bg=self.styles.colors['background'], fg=self.styles.colors['text_secondary'],
+                                    font=self.styles.fonts['small'], justify='left')
+            preview_label.pack(pady=10, padx=20)
+            
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao exportar HTML: {str(e)}")
+    
+    def update_dashboard(self, period):
+        """Atualiza dashboard com filtro de período"""
+        try:
+            # Atualizar o valor do filtro primeiro
+            if hasattr(self, 'period_var'):
+                self.period_var.set(period)
+            
+            # Limpar completamente o conteúdo antes de atualizar
+            self.clear_content()
+            
+            # Recriar o dashboard completo com o filtro de período atualizado
+            self.show_dashboard()
+                
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao atualizar dashboard: {str(e)}")
+    
+    def export_dashboard_charts(self, period, chart_type):
+        """Exporta gráficos do dashboard"""
+        try:
+            import plotly.graph_objects as go
+            import plotly.express as px
+            from plotly.subplots import make_subplots
+            import pandas as pd
+            import tempfile
+            import shutil
+            from tkinter import filedialog
+            
+            # Criar gráficos novamente para exportação
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False) as f:
+                # Reutilizar a lógica de create_interactive_charts
+                # Carregar dados e criar gráficos
+                with psy.connect(self.get_connection_string()) as conn:
+                    with conn.cursor(row_factory=dict_row) as cur:
+                        
+                        # Dados para gráficos (mesma lógica de create_interactive_charts)
+                        data = {}
+                        
+                        # 1. Evolução de incidentes
+                        cur.execute("""
+                            SELECT DATE(occurred_at) as date, COUNT(*) as incidents
+                            FROM traffic_incident 
+                            WHERE occurred_at >= CURRENT_DATE - INTERVAL '30 days'
+                            GROUP BY DATE(occurred_at)
+                            ORDER BY date
+                        """)
+                        incident_timeline = cur.fetchall()
+                        data['incident_timeline'] = incident_timeline
+                        
+                        # 2. Multas por status
+                        cur.execute("""
+                            SELECT status, COUNT(*) as count, COALESCE(SUM(amount), 0) as total_amount
+                            FROM fine 
+                            GROUP BY status
+                        """)
+                        fines_by_status = cur.fetchall()
+                        data['fines_by_status'] = fines_by_status
+                        
+                        # 3. Veículos por status
+                        cur.execute("""
+                            SELECT CASE WHEN allowed = TRUE THEN 'Ativos' ELSE 'Bloqueados' END as status, 
+                                   COUNT(*) as count
+                            FROM vehicle 
+                            GROUP BY allowed
+                        """)
+                        vehicles_by_status = cur.fetchall()
+                        data['vehicles_by_status'] = vehicles_by_status
+                        
+                        # 4. Sensores por tipo
+                        cur.execute("""
+                            SELECT type, COUNT(*) as count, 
+                                   COUNT(CASE WHEN active = TRUE THEN 1 END) as active
+                            FROM sensor 
+                            GROUP BY type
+                            ORDER BY count DESC
+                        """)
+                        sensors_by_type = cur.fetchall()
+                        data['sensors_by_type'] = sensors_by_type
+                        
+                        # 5. Crescimento de usuários
+                        cur.execute("""
+                            SELECT DATE_TRUNC('month', created_at) as month, COUNT(*) as new_users
+                            FROM app_user 
+                            WHERE created_at >= CURRENT_DATE - INTERVAL '12 months'
+                            GROUP BY DATE_TRUNC('month', created_at)
+                            ORDER BY month
+                        """)
+                        user_growth = cur.fetchall()
+                        data['user_growth'] = user_growth
+                
+                # Criar gráficos (mesma lógica)
+                fig = make_subplots(
+                    rows=3, cols=2,
+                    subplot_titles=('Incidentes (Últimos 30 dias)', 'Multas por Status', 
+                                    'Veículos por Status', 'Sensores por Tipo',
+                                    'Crescimento de Usuários', 'Resumo Financeiro'),
+                    specs=[[{"secondary_y": False}, {"type": "pie"}],
+                           [{"secondary_y": False}, {"type": "bar"}],
+                           [{"secondary_y": False}, {"type": "indicator"}]],
+                    vertical_spacing=0.08,
+                    horizontal_spacing=0.05
+                )
+                
+                # Adicionar traces (todos os gráficos)
+                if data['incident_timeline']:
+                    df_incidents = pd.DataFrame(data['incident_timeline'])
+                    df_incidents['incidents'] = df_incidents['incidents'].astype(int)
+                    df_incidents['date'] = pd.to_datetime(df_incidents['date']).dt.strftime('%Y-%m-%d')
+                    
+                    fig.add_trace(
+                        go.Scatter(x=df_incidents['date'], y=df_incidents['incidents'],
+                                  mode='lines+markers', name='Incidentes',
+                                  line=dict(color='#FF6B6B', width=3),
+                                  marker=dict(size=8)),
+                        row=1, col=1
+                    )
+                
+                if data['fines_by_status']:
+                    df_fines = pd.DataFrame(data['fines_by_status'])
+                    status_map = {'pending': 'Pendentes', 'paid': 'Pagas', 'overdue': 'Vencidas', 'cancelled': 'Canceladas'}
+                    df_fines['status_display'] = df_fines['status'].map(status_map)
+                    df_fines['count'] = df_fines['count'].astype(int)
+                    df_fines['total_amount'] = pd.to_numeric(df_fines['total_amount'], errors='coerce').fillna(0).astype(float)
+                    
+                    fig.add_trace(
+                        go.Pie(labels=df_fines['status_display'], values=df_fines['count'],
+                               name="Multas", hole=0.4,
+                               marker_colors=['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4']),
+                        row=1, col=2
+                    )
+                
+                if data['vehicles_by_status']:
+                    df_vehicles = pd.DataFrame(data['vehicles_by_status'])
+                    df_vehicles['count'] = df_vehicles['count'].astype(int)
+                    
+                    fig.add_trace(
+                        go.Bar(x=df_vehicles['status'], y=df_vehicles['count'],
+                               name='Veículos', marker_color='#4ECDC4'),
+                        row=2, col=1
+                    )
+                
+                if data['sensors_by_type']:
+                    df_sensors = pd.DataFrame(data['sensors_by_type'])
+                    df_sensors['count'] = df_sensors['count'].astype(int)
+                    df_sensors['active'] = df_sensors['active'].astype(int)
+                    
+                    fig.add_trace(
+                        go.Bar(y=df_sensors['type'], x=df_sensors['count'],
+                               name='Sensores', orientation='h',
+                               marker_color='#45B7D1'),
+                        row=2, col=2
+                    )
+                
+                if data['user_growth']:
+                    df_users = pd.DataFrame(data['user_growth'])
+                    df_users['new_users'] = df_users['new_users'].astype(int)
+                    df_users['month'] = pd.to_datetime(df_users['month']).dt.strftime('%Y-%m-%d')
+                    
+                    fig.add_trace(
+                        go.Scatter(x=df_users['month'], y=df_users['new_users'],
+                                  mode='lines+markers', name='Novos Usuários',
+                                  line=dict(color='#96CEB4', width=3),
+                                  marker=dict(size=8)),
+                        row=3, col=1
+                    )
+                
+                # Indicador financeiro
+                if data['fines_by_status']:
+                    df_fines = pd.DataFrame(data['fines_by_status'])
+                    df_fines['total_amount'] = pd.to_numeric(df_fines['total_amount'], errors='coerce').fillna(0).astype(float)
+                    
+                    total_amount = float(df_fines['total_amount'].sum())
+                    pending_amount = float(df_fines[df_fines['status'] == 'pending']['total_amount'].sum() if len(df_fines[df_fines['status'] == 'pending']) > 0 else 0)
+                    
+                    fig.add_trace(
+                        go.Indicator(
+                            mode="number+gauge+delta",
+                            value=total_amount,
+                            domain={'x': [0, 1], 'y': [0, 1]},
+                            title={'text': "Valor Total de Multas"},
+                            delta={'reference': pending_amount},
+                            gauge={
+                                'axis': {'range': [None, total_amount * 1.2] if total_amount > 0 else [0, 100]},
+                                'bar': {'color': "#FF6B6B"},
+                                'steps': [
+                                    {'range': [0, total_amount * 0.5] if total_amount > 0 else [0, 50], 'color': "lightgray"},
+                                    {'range': [total_amount * 0.5, total_amount] if total_amount > 0 else [50, 100], 'color': "gray"}
+                                ],
+                                'threshold': {
+                                    'line': {'color': "red", 'width': 4},
+                                    'thickness': 0.75,
+                                    'value': (total_amount * 0.9) if total_amount > 0 else 90
+                                }
+                            }
+                        ),
+                        row=3, col=2
+                    )
+                
+                # Layout
+                fig.update_layout(
+                    title_text=f"📊 SmartCityOS - Dashboard Exportado<br>Período: {period} | Tipo: {chart_type}",
+                    title_x=0.5,
+                    title_font_size=20,
+                    height=1200,
+                    showlegend=True,
+                    template="plotly_white"
+                )
+                
+                # Salvar gráfico
+                fig.write_html(f.name, include_plotlyjs='cdn')
+                
+                # File dialog para salvar
+                file_path = filedialog.asksaveasfilename(
+                    title="Exportar Dashboard",
+                    defaultextension=".html",
+                    filetypes=[("Arquivo HTML (*.html)", "*.html"), ("Todos os Arquivos", "*.*")],
+                    initialfile=f"dashboard_smartcity_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
+                )
+                
+                if file_path:
+                    # Copiar arquivo temporário para o local escolhido
+                    shutil.copy2(f.name, file_path)
+                    messagebox.showinfo("Sucesso", f"Dashboard exportado para:\n{file_path}")
+            
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao exportar dashboard: {str(e)}")
+        
     def show_statistics(self):
         self.clear_content()
         
@@ -2170,7 +3615,7 @@ class SmartCityOSGUI:
                     export_btn.pack(side=tk.RIGHT, padx=5)
                     
                     refresh_btn = tk.Button(button_frame, text="🔄 Atualizar", command=self.show_statistics,
-                                          bg=self.styles.colors['primary'], fg=self.styles.colors['white'],
+                                          bg=self.styles.colors['secondary'], fg=self.styles.colors['white'],
                                           font=self.styles.fonts['button'], relief='flat',
                                           padx=10, pady=8, cursor='hand2')
                     refresh_btn.pack(side=tk.RIGHT, padx=20, pady=15)
@@ -2559,9 +4004,239 @@ class SmartCityOSGUI:
         # Pack
         table_frame.pack(fill=tk.X, padx=10, pady=5)
         
+    def export_sql_results(self):
+        """Exporta resultados de consulta SQL para CSV ou XLSX"""
+        if not self.connected:
+            messagebox.showerror("Erro", "Conecte-se ao banco de dados para exportar resultados!")
+            return
+        
+        try:
+            # Dialog para selecionar arquivo e formato
+            from tkinter import filedialog
+            file_path = filedialog.asksaveasfilename(
+                title="Exportar Resultados SQL",
+                filetypes=[
+                    ("Arquivo Excel (*.xlsx)", "*.xlsx"),
+                    ("Arquivo CSV (*.csv)", "*.csv"),
+                    ("Todos os Arquivos", "*.*")
+                ],
+                defaultextension=".xlsx",
+                initialfile=f"resultados_sql_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+            )
+            
+            if not file_path:
+                return
+            
+            # Garantir que o arquivo tenha extensão
+            if not file_path.lower().endswith(('.xlsx', '.csv')):
+                file_path += '.xlsx'  # Padrão Excel
+            
+            # Determinar formato pelo arquivo selecionado
+            is_excel = file_path.lower().endswith('.xlsx')
+            
+            # Obter SQL do text widget
+            sql_query = self.sql_text.get("1.0", tk.END).strip()
+            
+            if not sql_query:
+                messagebox.showerror("Erro", "Digite uma consulta SQL para exportar os resultados!")
+                return
+            
+            # Executar consulta SQL
+            with psy.connect(self.get_connection_string()) as conn:
+                with conn.cursor(row_factory=dict_row) as cur:
+                    try:
+                        cur.execute(sql_query)
+                        results = cur.fetchall()
+                        
+                        if not results:
+                            messagebox.showwarning("Sem Resultados", "A consulta não retornou nenhum resultado!")
+                            return
+                        
+                        # Importar pandas
+                        import pandas as pd
+                        
+                        # Criar DataFrame
+                        df = pd.DataFrame(results)
+                        
+                        # Exportar baseado no formato
+                        if is_excel:
+                            # Exportar para Excel
+                            with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
+                                # Resultados da consulta
+                                df.to_excel(writer, sheet_name='Resultados', index=False)
+                                
+                                # Adicionar informações da consulta
+                                query_info = pd.DataFrame([
+                                    ['SmartCityOS - Resultados de Consulta SQL'],
+                                    [f'Data da Exportação: {datetime.now().strftime("%d/%m/%Y %H:%M:%S")}'],
+                                    [f'Formato: Excel (.xlsx)'],
+                                    [f'Consulta SQL:'],
+                                    [sql_query],
+                                    [f'Total de Registros: {len(results)}']
+                                ], columns=['Informação'])
+                                query_info.to_excel(writer, sheet_name='Informações', index=False)
+                            
+                            messagebox.showinfo("Sucesso", f"Resultados exportados com sucesso!\n\nArquivo Excel salvo em:\n{file_path}\n\nRegistros exportados: {len(results)}")
+                        else:
+                            # Exportar para CSV
+                            df.to_csv(file_path, index=False, encoding='utf-8-sig')
+                            messagebox.showinfo("Sucesso", f"Resultados exportados com sucesso!\n\nArquivo CSV salvo em:\n{file_path}\n\nRegistros exportados: {len(results)}")
+                        
+                    except Exception as sql_error:
+                        messagebox.showerror("Erro SQL", f"Erro na consulta SQL:\n{str(sql_error)}")
+                        return
+            
+        except ImportError:
+            messagebox.showerror("Erro", "Bibliotecas necessárias não encontradas!\n\nInstale:\npip install pandas openpyxl")
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao exportar resultados: {str(e)}")
+        
     def export_statistics(self):
-        """Exporta estatísticas para CSV"""
-        messagebox.showinfo("Em desenvolvimento", "Funcionalidade de exportação em desenvolvimento!")
+        """Exporta estatísticas para CSV ou XLSX usando pandas"""
+        if not self.connected:
+            messagebox.showerror("Erro", "Conecte-se ao banco de dados para exportar estatísticas!")
+            return
+        
+        try:
+            # Dialog para selecionar arquivo e formato
+            from tkinter import filedialog
+            file_path = filedialog.asksaveasfilename(
+                title="Exportar Estatísticas",
+                filetypes=[
+                    ("Arquivo Excel (*.xlsx)", "*.xlsx"),
+                    ("Arquivo CSV (*.csv)", "*.csv"),
+                    ("Todos os Arquivos", "*.*")
+                ],
+                defaultextension=".xlsx",
+                initialfile=f"estatisticas_smartcity_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+            )
+            
+            if not file_path:
+                return
+            
+            # Garantir que o arquivo tenha extensão
+            if not file_path.lower().endswith(('.xlsx', '.csv')):
+                file_path += '.xlsx'  # Padrão Excel
+            
+            # Determinar formato pelo arquivo selecionado
+            is_excel = file_path.lower().endswith('.xlsx')
+            
+            # Carregar estatísticas completas
+            with psy.connect(self.get_connection_string()) as conn:
+                with conn.cursor(row_factory=dict_row) as cur:
+                    stats = self.load_comprehensive_statistics(cur)
+            
+            # Importar pandas
+            import pandas as pd
+            
+            # Criar dados para exportação
+            export_data = []
+            
+            # Estatísticas Gerais
+            export_data.extend([
+                ['ESTATÍSTICAS GERAIS', '', ''],
+                ['Métrica', 'Total', 'Descrição'],
+                ['Total de Usuários', stats['users']['total'], 'Número total de usuários cadastrados'],
+                ['Total de Cidadãos', stats['citizens']['total'], 'Número total de cidadãos cadastrados'],
+                ['Total de Veículos', stats['vehicles']['total'], 'Número total de veículos cadastrados'],
+                ['Total de Sensores', stats['sensors']['total_sensors'], 'Número total de sensores cadastrados'],
+                ['Total de Incidentes', stats['incidents']['total_incidents'], 'Número total de incidentes registrados'],
+                ['Total de Multas', stats['fines']['total_fines'], 'Número total de multas geradas'],
+                ['', '', ''],
+                
+                # Estatísticas de Usuários
+                ['ESTATÍSTICAS DE USUÁRIOS', '', ''],
+                ['Métrica', 'Total', 'Descrição'],
+                ['Usuários Ativos', stats['users']['total'], 'Usuários com acesso ao sistema'],
+                ['Usuários Inativos', 0, 'Usuários sem acesso (calculado)'],
+                ['Novos Usuários (30 dias)', stats['users']['this_month'], 'Usuários cadastrados nos últimos 30 dias'],
+                ['', '', ''],
+                
+                # Estatísticas de Cidadãos
+                ['ESTATÍSTICAS DE CIDADÃOS', '', ''],
+                ['Métrica', 'Total', 'Descrição'],
+                ['Cidadãos Ativos', stats['citizens']['with_access'], 'Cidadãos com permissão de acesso'],
+                ['Cidadãos Inativos', stats['citizens']['total'] - stats['citizens']['with_access'], 'Cidadãos sem permissão de acesso'],
+                ['Saldo Total (R$)', 0.00, 'Saldo total disponível dos cidadãos'],
+                ['Dívida Total (R$)', f"{stats['citizens']['total_debt']:.2f}", 'Dívida total acumulada dos cidadãos'],
+                ['Novos Cidadãos (30 dias)', 0, 'Cidadãos cadastrados nos últimos 30 dias'],
+                ['', '', ''],
+                
+                # Estatísticas de Veículos
+                ['ESTATÍSTICAS DE VEÍCULOS', '', ''],
+                ['Métrica', 'Total', 'Descrição'],
+                ['Veículos Ativos', stats['vehicles']['active'], 'Veículos com permissão de circulação'],
+                ['Veículos Inativos', stats['vehicles']['blocked'], 'Veículos sem permissão de circulação'],
+                ['Novos Veículos (30 dias)', 0, 'Veículos cadastrados nos últimos 30 dias'],
+                ['', '', ''],
+                
+                # Estatísticas de Sensores
+                ['ESTATÍSTICAS DE SENSORES', '', ''],
+                ['Métrica', 'Total', 'Descrição'],
+                ['Sensores Ativos', stats['sensors']['active_sensors'], 'Sensores atualmente em operação'],
+                ['Sensores Inativos', stats['sensors']['total_sensors'] - stats['sensors']['active_sensors'], 'Sensores desativados'],
+                ['Sensores com Leituras', 0, 'Sensores que já registraram leituras'],
+                ['Novos Sensores (30 dias)', 0, 'Sensores cadastrados nos últimos 30 dias'],
+                ['', '', ''],
+                
+                # Estatísticas de Incidentes
+                ['ESTATÍSTICAS DE INCIDENTES', '', ''],
+                ['Métrica', 'Total', 'Descrição'],
+                ['Incidentes (7 dias)', stats['incidents']['last_7_days'], 'Incidentes registrados nos últimos 7 dias'],
+                ['Incidentes (30 dias)', stats['incidents']['last_30_days'], 'Incidentes registrados nos últimos 30 dias'],
+                ['', '', ''],
+                
+                # Estatísticas de Multas
+                ['ESTATÍSTICAS DE MULTAS', '', ''],
+                ['Métrica', 'Total', 'Descrição'],
+                ['Multas Pendentes', stats['fines']['pending_fines'], 'Multas aguardando pagamento'],
+                ['Multas Pagas', stats['fines']['paid_fines'], 'Multas já quitadas'],
+                ['Multas Canceladas', stats['fines']['cancelled_fines'], 'Multas canceladas'],
+                ['Multas Vencidas', stats['fines']['overdue_fines'], 'Multas com vencimento ultrapassado'],
+                ['Valor Total Pendente (R$)', f"{stats['fines']['pending_amount']:.2f}", 'Valor total das multas pendentes'],
+                ['Valor Total Pago (R$)', f"{stats['fines']['paid_amount']:.2f}", 'Valor total das multas já pagas'],
+                ['Valor Total Vencido (R$)', f"{stats['fines']['overdue_amount']:.2f}", 'Valor total das multas vencidas'],
+                ['', '', ''],
+                
+                # Resumo Financeiro
+                ['RESUMO FINANCEIRO', '', ''],
+                ['Métrica', 'Valor (R$)', 'Descrição'],
+                ['Saldo Total dos Cidadãos', 0.00, 'Saldo total disponível dos cidadãos'],
+                ['Dívida Total dos Cidadãos', f"{stats['citizens']['total_debt']:.2f}", 'Dívida total acumulada dos cidadãos'],
+                ['Valor Total de Multas Pendentes', f"{stats['fines']['pending_amount']:.2f}", 'Valor total das multas pendentes'],
+                ['Valor Total de Multas Pagas', f"{stats['fines']['paid_amount']:.2f}", 'Valor total das multas já pagas'],
+                ['Valor Total de Multas Vencidas', f"{stats['fines']['overdue_amount']:.2f}", 'Valor total das multas vencidas'],
+            ])
+            
+            # Criar DataFrame
+            df = pd.DataFrame(export_data, columns=['Categoria', 'Valor', 'Descrição'])
+            
+            # Exportar baseado no formato
+            if is_excel:
+                # Exportar para Excel
+                with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
+                    # Estatísticas Gerais
+                    df.to_excel(writer, sheet_name='Estatísticas', index=False)
+                    
+                    # Adicionar metadados
+                    metadata_df = pd.DataFrame([
+                        ['SmartCityOS - Sistema Operacional Inteligente para Cidades'],
+                        [f'Data da Exportação: {datetime.now().strftime("%d/%m/%Y %H:%M:%S")}'],
+                        [f'Formato: Excel (.xlsx)'],
+                        [f'Ve rsão: 1.0']
+                    ], columns=['Informação'])
+                    metadata_df.to_excel(writer, sheet_name='Metadados', index=False)
+                
+                messagebox.showinfo("Sucesso", f"Estatísticas exportadas com sucesso!\n\nArquivo Excel salvo em:\n{file_path}")
+            else:
+                # Exportar para CSV
+                df.to_csv(file_path, index=False, encoding='utf-8-sig')
+                messagebox.showinfo("Sucesso", f"Estatísticas exportadas com sucesso!\n\nArquivo CSV salvo em:\n{file_path}")
+            
+        except ImportError:
+            messagebox.showerror("Erro", "Bibliotecas necessárias não encontradas!\n\nInstale:\npip install pandas openpyxl")
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao exportar estatísticas: {str(e)}")
         
     def show_sql_console(self):
         self.clear_content()
@@ -2585,6 +4260,12 @@ class SmartCityOSGUI:
                             padx=12, pady=6, cursor='hand2')
         clear_btn.pack(side=tk.RIGHT, padx=5)
         
+        export_btn = tk.Button(button_frame, text="📊 Exportar", command=self.export_sql_results,
+                              bg=self.styles.colors['success'], fg=self.styles.colors['white'],
+                              font=self.styles.fonts['button'], relief='flat',
+                              padx=12, pady=6, cursor='hand2')
+        export_btn.pack(side=tk.RIGHT, padx=5)
+        
         example_btn = tk.Button(button_frame, text="📋 Exemplo", command=self.load_sql_example,
                               bg=self.styles.colors['secondary'], fg=self.styles.colors['white'],
                               font=self.styles.fonts['button'], relief='flat',
@@ -2595,6 +4276,7 @@ class SmartCityOSGUI:
         main_container = tk.Frame(self.content_frame, bg=self.styles.colors['background'])
         main_container.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
         
+        # ... (restante do código permanece igual)
         # Coluna esquerda - Editor SQL
         left_frame = tk.Frame(main_container, bg=self.styles.colors['background'])
         left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
@@ -2729,13 +4411,6 @@ class SmartCityOSGUI:
                                     font=self.styles.fonts['small'])
         self.results_info.pack(side=tk.LEFT)
         
-        # Botão de exportação
-        self.export_btn = tk.Button(info_frame, text="📥 Exportar Relatório", command=self.export_results,
-                                   bg=self.styles.colors['secondary'], fg=self.styles.colors['white'],
-                                   font=self.styles.fonts['button'], relief='flat',
-                                   padx=12, pady=6, cursor='hand2', state='disabled')
-        self.export_btn.pack(side=tk.RIGHT)
-        
         # Configurar weights do container principal
         main_container.columnconfigure(0, weight=1)
         main_container.columnconfigure(1, weight=1)
@@ -2750,6 +4425,39 @@ class SmartCityOSGUI:
         if not sql:
             messagebox.showwarning("Aviso", "Digite uma consulta SQL!")
             return
+        
+        # Remover comentários e espaços em branco do início para validação
+        sql_clean = sql
+        lines = sql.split('\n')
+        first_non_comment_line = None
+        
+        for line in lines:
+            stripped = line.strip()
+            if stripped and not stripped.startswith('--'):
+                first_non_comment_line = stripped
+                break
+        
+        if not first_non_comment_line:
+            messagebox.showwarning("Aviso", "Digite uma consulta SQL válida!")
+            return
+        
+        # Verificar se contém apenas comandos de consulta permitidos
+        sql_upper = sql_clean.upper()
+        forbidden_commands = ['ALTER', 'DROP', 'UPDATE', 'DELETE', 'INSERT', 'CREATE', 'TRUNCATE', 'GRANT', 'REVOKE']
+        
+        # Verificar se algum comando proibido está no SQL (em qualquer posição)
+        for cmd in forbidden_commands:
+            # Usar regex para detectar comando como palavra completa
+            pattern = r'\b' + cmd + r'\b'
+            if re.search(pattern, sql_upper):
+                messagebox.showerror("Erro", f"Comando '{cmd}' não é permitido no console SQL!\n\nApenas consultas SELECT são permitidas.")
+                return
+        
+        # Verificar se a primeira linha não-comentário começa com SELECT ou WITH (para CTEs)
+        first_line_upper = first_non_comment_line.upper()
+        if not (first_line_upper.startswith('SELECT') or first_line_upper.startswith('WITH')):
+            messagebox.showerror("Erro", "Apenas consultas SELECT são permitidas no console SQL!\n\nUse SELECT para consultar dados.")
+            return
             
         try:
             # Garantir que a conexão está válida
@@ -2757,10 +4465,19 @@ class SmartCityOSGUI:
                 messagebox.showerror("Erro", "Conexão com banco de dados foi fechada. Conecte-se novamente.")
                 return
                 
+            # Iniciar transação
+            self.conn.autocommit = False
+            
             # Criar cursor com psycopg2.extras.DictCursor
             cur = self.conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
             cur.execute(sql)
             results = cur.fetchall()
+            
+            # Commit da transação
+            self.conn.commit()
+            
+            # Voltar ao modo autocommit para outras operações
+            self.conn.autocommit = True
             
             # Limpar treeview
             for item in self.results_tree.get_children():
@@ -2784,29 +4501,39 @@ class SmartCityOSGUI:
                 
                 # Atualizar informações
                 self.results_info.config(text=f"✅ {len(results)} registros encontrados")
-                self.export_btn.config(state='normal')
                 
             else:
                 # Sem resultados
                 self.results_info.config(text="📭 Nenhum registro encontrado")
-                self.export_btn.config(state='disabled')
                 
         except psycopg2.Error as e:
+            # Rollback automático em caso de erro
+            try:
+                self.conn.rollback()
+                self.conn.autocommit = True
+            except:
+                pass
+            
             # Limpar treeview em caso de erro
             for item in self.results_tree.get_children():
                 self.results_tree.delete(item)
             
             self.results_info.config(text=f"❌ Erro SQL: {str(e)}")
-            self.export_btn.config(state='disabled')
-            messagebox.showerror("Erro SQL", f"Erro ao executar consulta: {str(e)}")
+            messagebox.showerror("Erro SQL", f"Erro ao executar consulta: {str(e)}\n\n🔄 Rollback automático realizado!")
         except Exception as e:
+            # Rollback automático em caso de erro
+            try:
+                self.conn.rollback()
+                self.conn.autocommit = True
+            except:
+                pass
+            
             # Limpar treeview em caso de erro
             for item in self.results_tree.get_children():
                 self.results_tree.delete(item)
             
             self.results_info.config(text=f"❌ Erro: {str(e)}")
-            self.export_btn.config(state='disabled')
-            messagebox.showerror("Erro", f"Erro ao executar consulta: {str(e)}")
+            messagebox.showerror("Erro", f"Erro ao executar consulta: {str(e)}\n\n🔄 Rollback automático realizado!")
             
     def clear_sql(self):
         """Limpa o editor SQL completamente"""
@@ -3144,7 +4871,134 @@ class SmartCityOSGUI:
                  font=self.styles.fonts['button'], padx=20, pady=8).pack(side=tk.LEFT, padx=5)
         
     def search_citizen_by_cpf(self):
-        messagebox.showinfo("Em desenvolvimento", "Busca por CPF em desenvolvimento!")
+        """Busca cidadão por CPF"""
+        dialog = tk.Toplevel(self.root)
+        dialog.title("🔍 Buscar Cidadão por CPF")
+        dialog.geometry("400x200")
+        dialog.configure(bg=self.styles.colors['background'])
+        dialog.transient(self.root)
+        dialog.grab_set()
+        
+        # Header
+        header = tk.Frame(dialog, bg=self.styles.colors['primary'], height=60)
+        header.pack(fill=tk.X)
+        header.pack_propagate(False)
+        
+        title = tk.Label(header, text="🔍 Buscar Cidadão", 
+                        bg=self.styles.colors['primary'], fg=self.styles.colors['white'],
+                        font=self.styles.fonts['title'])
+        title.pack(expand=True)
+        
+        # Form frame
+        form_frame = tk.Frame(dialog, bg=self.styles.colors['background'])
+        form_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+        
+        # CPF input
+        tk.Label(form_frame, text="📋 CPF:", bg=self.styles.colors['background'],
+                fg=self.styles.colors['text_primary'], font=self.styles.fonts['normal']).pack(anchor='w', pady=(0, 5))
+        
+        cpf_var = tk.StringVar()
+        cpf_entry = tk.Entry(form_frame, textvariable=cpf_var, font=self.styles.fonts['normal'])
+        cpf_entry.pack(fill=tk.X, pady=(0, 20))
+        cpf_entry.focus_set()
+        
+        def search():
+            cpf = cpf_var.get().strip()
+            if not cpf:
+                messagebox.showerror("Erro", "Digite o CPF para buscar!")
+                return
+            
+            # Remover caracteres não numéricos
+            cpf_clean = ''.join(filter(str.isdigit, cpf))
+            if len(cpf_clean) != 11:
+                messagebox.showerror("Erro", "CPF deve ter 11 dígitos!")
+                return
+            
+            try:
+                with psy.connect(self.get_connection_string()) as conn:
+                    with conn.cursor(row_factory=dict_row) as cur:
+                        cur.execute("""
+                            SELECT c.id, c.first_name, c.last_name, c.email, c.cpf, c.phone,
+                                   c.address, c.birth_date, c.wallet_balance, c.debt, c.allowed,
+                                   u.username, c.created_at
+                            FROM citizen c
+                            JOIN app_user u ON c.app_user_id = u.id
+                            WHERE c.cpf = %s
+                        """, (cpf_clean,))
+                        citizen = cur.fetchone()
+                        
+                        if citizen:
+                            # Mostrar resultados
+                            result_dialog = tk.Toplevel(self.root)
+                            result_dialog.title("👤 Cidadão Encontrado")
+                            result_dialog.geometry("500x400")
+                            result_dialog.configure(bg=self.styles.colors['background'])
+                            result_dialog.transient(self.root)
+                            result_dialog.grab_set()
+                            
+                            # Header
+                            result_header = tk.Frame(result_dialog, bg=self.styles.colors['success'], height=60)
+                            result_header.pack(fill=tk.X)
+                            result_header.pack_propagate(False)
+                            
+                            result_title = tk.Label(result_header, text="✅ Cidadão Encontrado", 
+                                                bg=self.styles.colors['success'], fg=self.styles.colors['white'],
+                                                font=self.styles.fonts['title'])
+                            result_title.pack(expand=True)
+                            
+                            # Info frame
+                            info_frame = tk.Frame(result_dialog, bg=self.styles.colors['background'])
+                            info_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+                            
+                            # Dados do cidadão
+                            full_name = f"{citizen['first_name']} {citizen['last_name']}"
+                            status = "✅ Ativo" if citizen['allowed'] else "🔴 Inativo"
+                            
+                            info_text = f"""
+👤 **Nome Completo:** {full_name}
+📋 **CPF:** {citizen['cpf']}
+📧 **Email:** {citizen['email']}
+📱 **Telefone:** {citizen['phone'] or 'Não informado'}
+🏠 **Endereço:** {citizen['address']}
+🎂 **Data Nascimento:** {citizen['birth_date'].strftime('%d/%m/%Y') if citizen['birth_date'] else 'N/A'}
+💰 **Saldo:** {format_currency_brl(citizen['wallet_balance']) if citizen['wallet_balance'] else 'R$ 0,00'}
+💳 **Dívida:** {format_currency_brl(citizen['debt']) if citizen['debt'] else 'R$ 0,00'}
+📊 **Status:** {status}
+👤 **Username:** {citizen['username']}
+📅 **Cadastro:** {citizen['created_at'].strftime('%d/%m/%Y %H:%M') if citizen['created_at'] else 'N/A'}
+                            """
+                            
+                            info_label = tk.Label(info_frame, text=info_text, bg=self.styles.colors['background'],
+                                             fg=self.styles.colors['text_primary'], font=self.styles.fonts['normal'],
+                                             justify='left')
+                            info_label.pack(anchor='w')
+                            
+                            # Botão fechar
+                            tk.Button(result_dialog, text="✅ Fechar", command=result_dialog.destroy,
+                                   bg=self.styles.colors['success'], fg=self.styles.colors['white'],
+                                   font=self.styles.fonts['button'], padx=20, pady=8).pack(pady=20)
+                            
+                            dialog.destroy()
+                        else:
+                            messagebox.showwarning("Não Encontrado", f"Nenhum cidadão encontrado com o CPF {cpf}")
+                            
+            except Exception as e:
+                messagebox.showerror("Erro", f"Erro ao buscar cidadão: {str(e)}")
+        
+        # Botões
+        button_frame = tk.Frame(form_frame, bg=self.styles.colors['background'])
+        button_frame.pack(fill=tk.X)
+        
+        tk.Button(button_frame, text="🔍 Buscar", command=search,
+                 bg=self.styles.colors['success'], fg=self.styles.colors['white'],
+                 font=self.styles.fonts['button'], padx=20, pady=8).pack(side=tk.LEFT, padx=(0, 5))
+        
+        tk.Button(button_frame, text="❌ Cancelar", command=dialog.destroy,
+                 bg=self.styles.colors['accent'], fg=self.styles.colors['white'],
+                 font=self.styles.fonts['button'], padx=20, pady=8).pack(side=tk.LEFT)
+        
+        # Enter para buscar
+        cpf_entry.bind('<Return>', lambda e: search())
         
     def add_vehicle_dialog(self):
         """Abre diálogo para adicionar novo veículo"""
@@ -3244,7 +5098,8 @@ class SmartCityOSGUI:
                             if citizen_result:
                                 citizen_id = citizen_result[0]
                             else:
-                                messagebox.showwarning("Aviso", "CPF não encontrado. Veículo será cadastrado sem proprietário.")
+                                messagebox.showerror("Erro", "CPF não encontrado no sistema! Cadastre o cidadão primeiro.")
+                                return
                 
                 with psy.connect(self.get_connection_string()) as conn:
                     with conn.cursor() as cur:
@@ -3295,7 +5150,136 @@ class SmartCityOSGUI:
                  font=self.styles.fonts['button'], padx=20, pady=8).pack(side=tk.LEFT, padx=5)
         
     def search_vehicle_by_plate(self):
-        messagebox.showinfo("Em desenvolvimento", "Busca por placa em desenvolvimento!")
+        """Busca veículo por placa"""
+        dialog = tk.Toplevel(self.root)
+        dialog.title("🔍 Buscar Veículo por Placa")
+        dialog.geometry("400x200")
+        dialog.configure(bg=self.styles.colors['background'])
+        dialog.transient(self.root)
+        dialog.grab_set()
+        
+        # Header
+        header = tk.Frame(dialog, bg=self.styles.colors['primary'], height=60)
+        header.pack(fill=tk.X)
+        header.pack_propagate(False)
+        
+        title = tk.Label(header, text="🔍 Buscar Veículo", 
+                        bg=self.styles.colors['primary'], fg=self.styles.colors['white'],
+                        font=self.styles.fonts['title'])
+        title.pack(expand=True)
+        
+        # Form frame
+        form_frame = tk.Frame(dialog, bg=self.styles.colors['background'])
+        form_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+        
+        # Placa input
+        tk.Label(form_frame, text="🚗 Placa:", bg=self.styles.colors['background'],
+                fg=self.styles.colors['text_primary'], font=self.styles.fonts['normal']).pack(anchor='w', pady=(0, 5))
+        
+        plate_var = tk.StringVar()
+        plate_entry = tk.Entry(form_frame, textvariable=plate_var, font=self.styles.fonts['normal'])
+        plate_entry.pack(fill=tk.X, pady=(0, 20))
+        plate_entry.focus_set()
+        
+        def search():
+            plate = plate_var.get().strip().upper()
+            if not plate:
+                messagebox.showerror("Erro", "Digite a placa para buscar!")
+                return
+            
+            # Validar formato básico da placa (XXX-XXXX ou XXXXXXX)
+            import re
+            if not re.match(r'^[A-Z]{3}-?[A-Z0-9]{4}$', plate):
+                messagebox.showerror("Erro", "Formato de placa inválido! Use XXX-XXXX ou XXXXXXX")
+                return
+            
+            # Padronizar formato
+            if len(plate) == 7:
+                plate = plate[:3] + '-' + plate[3:]
+            
+            try:
+                with psy.connect(self.get_connection_string()) as conn:
+                    with conn.cursor(row_factory=dict_row) as cur:
+                        cur.execute("""
+                            SELECT v.id, v.license_plate, v.model, v.year, v.allowed,
+                                   u.username, c.first_name, c.last_name, c.cpf,
+                                   v.created_at
+                            FROM vehicle v
+                            JOIN app_user u ON v.app_user_id = u.id
+                            LEFT JOIN citizen c ON v.citizen_id = c.id
+                            WHERE v.license_plate = %s
+                        """, (plate,))
+                        vehicle = cur.fetchone()
+                        
+                        if vehicle:
+                            # Mostrar resultados
+                            result_dialog = tk.Toplevel(self.root)
+                            result_dialog.title("🚗 Veículo Encontrado")
+                            result_dialog.geometry("500x350")
+                            result_dialog.configure(bg=self.styles.colors['background'])
+                            result_dialog.transient(self.root)
+                            result_dialog.grab_set()
+                            
+                            # Header
+                            result_header = tk.Frame(result_dialog, bg=self.styles.colors['success'], height=60)
+                            result_header.pack(fill=tk.X)
+                            result_header.pack_propagate(False)
+                            
+                            result_title = tk.Label(result_header, text="✅ Veículo Encontrado", 
+                                                bg=self.styles.colors['success'], fg=self.styles.colors['white'],
+                                                font=self.styles.fonts['title'])
+                            result_title.pack(expand=True)
+                            
+                            # Info frame
+                            info_frame = tk.Frame(result_dialog, bg=self.styles.colors['background'])
+                            info_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+                            
+                            # Dados do veículo
+                            status = "✅ Ativo" if vehicle['allowed'] else "🔴 Inativo"
+                            owner_name = f"{vehicle['first_name'] or ''} {vehicle['last_name'] or ''}".strip() or 'Não vinculado'
+                            
+                            info_text = f"""
+🚗 **Placa:** {vehicle['license_plate']}
+📋 **Modelo:** {vehicle['model']}
+📅 **Ano:** {vehicle['year']}
+👤 **Proprietário:** {owner_name}
+📋 **CPF Proprietário:** {vehicle['cpf'] or 'Não vinculado'}
+👤 **Username:** {vehicle['username']}
+📊 **Status:** {status}
+📅 **Cadastro:** {vehicle['created_at'].strftime('%d/%m/%Y %H:%M') if vehicle['created_at'] else 'N/A'}
+                            """
+                            
+                            info_label = tk.Label(info_frame, text=info_text, bg=self.styles.colors['background'],
+                                             fg=self.styles.colors['text_primary'], font=self.styles.fonts['normal'],
+                                             justify='left')
+                            info_label.pack(anchor='w')
+                            
+                            # Botão fechar
+                            tk.Button(result_dialog, text="✅ Fechar", command=result_dialog.destroy,
+                                   bg=self.styles.colors['success'], fg=self.styles.colors['white'],
+                                   font=self.styles.fonts['button'], padx=20, pady=8).pack(pady=20)
+                            
+                            dialog.destroy()
+                        else:
+                            messagebox.showwarning("Não Encontrado", f"Nenhum veículo encontrado com a placa {plate}")
+                            
+            except Exception as e:
+                messagebox.showerror("Erro", f"Erro ao buscar veículo: {str(e)}")
+        
+        # Botões
+        button_frame = tk.Frame(form_frame, bg=self.styles.colors['background'])
+        button_frame.pack(fill=tk.X)
+        
+        tk.Button(button_frame, text="🔍 Buscar", command=search,
+                 bg=self.styles.colors['success'], fg=self.styles.colors['white'],
+                 font=self.styles.fonts['button'], padx=20, pady=8).pack(side=tk.LEFT, padx=(0, 5))
+        
+        tk.Button(button_frame, text="❌ Cancelar", command=dialog.destroy,
+                 bg=self.styles.colors['accent'], fg=self.styles.colors['white'],
+                 font=self.styles.fonts['button'], padx=20, pady=8).pack(side=tk.LEFT)
+        
+        # Enter para buscar
+        plate_entry.bind('<Return>', lambda e: search())
         
     def add_sensor_dialog(self):
         """Abre diálogo para adicionar novo sensor"""
@@ -3611,7 +5595,20 @@ class SmartCityOSGUI:
             pass
         
         # Métodos de pagamento
-        payment_methods = ['Cartão de Crédito', 'Cartão de Débito', 'Dinheiro', 'PIX', 'Boleto', 'Transferência Bancária']
+        payment_methods = ['Carteira Digital','Cartão de Crédito', 'Cartão de Débito', 'Dinheiro', 'PIX', 'Boleto', 'Transferência Bancária']
+        
+        def update_amount():
+            """Atualiza o valor quando uma multa é selecionada"""
+            try:
+                fine_info = vars['fine'].get()
+                if fine_info and '#' in fine_info:
+                    # Extrair valor da string da multa
+                    parts = fine_info.split(' - ')
+                    if len(parts) >= 2 and 'R$' in parts[1]:
+                        amount_str = parts[1].replace('R$ ', '').strip()
+                        vars['amount'].set(amount_str)
+            except:
+                pass
         
         # Campos do formulário
         fields = [
@@ -3677,7 +5674,7 @@ class SmartCityOSGUI:
                 
                 # Extrair ID da multa
                 fine_id = int(vars['fine'].get().split('#')[1].split(' -')[0])
-                amount = float(vars['amount'].get())
+                amount = self.converter_valor_monetario(vars['amount'].get())
                 payment_method = vars['payment_method'].get()
                 
                 with psy.connect(self.get_connection_string()) as conn:
@@ -3694,18 +5691,15 @@ class SmartCityOSGUI:
                             messagebox.showerror("Erro", f"Esta multa já está {status}!")
                             return
                         
-                        if abs(amount - float(db_amount)) > 0.01:
+                        # Validar valor digitado
+                        amount_digitado = self.converter_valor_monetario(vars['amount'].get())
+                        amount_banco = self.converter_valor_monetario(db_amount)
+                        
+                        if abs(amount_digitado - amount_banco) > 0.01:
                             messagebox.showerror("Erro", "Valor da multa não confere!")
                             return
                         
-                        # Atualizar status da multa
-                        cur.execute("""
-                            UPDATE fine 
-                            SET status = 'paid', updated_at = CURRENT_TIMESTAMP
-                            WHERE id = %s
-                        """, (fine_id,))
-                        
-                        # Inserir registro de pagamento
+                        # Inserir registro de pagamento - o trigger apply_fine_payment cuida do resto
                         cur.execute("""
                             INSERT INTO fine_payment (
                                 fine_id, amount_paid, payment_method
@@ -3832,7 +5826,8 @@ class SmartCityOSGUI:
                 
                 # Validar valor
                 try:
-                    amount = float(vars['amount'].get())
+                    # Converter valor monetário brasileiro (ex: "100,00") para float
+                    amount = self.converter_valor_monetario(vars['amount'].get())
                     if amount <= 0:
                         messagebox.showerror("Erro", "Valor deve ser maior que zero!")
                         return
@@ -3842,14 +5837,14 @@ class SmartCityOSGUI:
                 
                 # Validar data de vencimento
                 try:
-                    from datetime import datetime
+                    from datetime import datetime, timedelta
                     due_date = datetime.strptime(vars['due_date'].get(), '%d/%m/%Y').date()
                     today = datetime.now().date()
                     
                     # Buscar data do incidente
                     incident_id = int(vars['incident'].get().split('#')[1].split(' -')[0])
                     with psy.connect(self.get_connection_string()) as conn:
-                        with conn.cursor() as cur:
+                        with conn.cursor(row_factory=dict_row) as cur:
                             cur.execute("SELECT occurred_at FROM traffic_incident WHERE id = %s", (incident_id,))
                             incident_result = cur.fetchone()
                             if incident_result:
@@ -3861,7 +5856,7 @@ class SmartCityOSGUI:
                                     return
                                 
                                 # Validar se vencimento é muito anterior à data atual
-                                if due_date < today - datetime.timedelta(days=365):
+                                if due_date < today - timedelta(days=365):
                                     messagebox.showerror("Erro", "A data de vencimento não pode ser mais de 1 ano no passado!")
                                     return
                 except ValueError:
@@ -3879,13 +5874,28 @@ class SmartCityOSGUI:
                             messagebox.showerror("Erro", "Este incidente já possui uma multa!")
                             return
                         
+                        # Buscar citizen_id do incidente
+                        cur.execute("""
+                            SELECT c.id as citizen_id
+                            FROM traffic_incident ti
+                            JOIN vehicle v ON v.id = ti.vehicle_id
+                            JOIN citizen c ON c.id = v.citizen_id
+                            WHERE ti.id = %s
+                        """, (incident_id,))
+                        citizen_result = cur.fetchone()
+                        if not citizen_result:
+                            messagebox.showerror("Erro", "Não foi possível encontrar o cidadão associado ao incidente!")
+                            return
+                        citizen_id = citizen_result[0]
+                        
                         # Inserir multa
                         cur.execute("""
                             INSERT INTO fine (
-                                traffic_incident_id, amount, due_date
-                            ) VALUES (%s, %s, %s)
+                                traffic_incident_id, citizen_id, amount, due_date
+                            ) VALUES (%s, %s, %s, %s)
                         """, (
                             incident_id,
+                            citizen_id,
                             amount,
                             due_date
                         ))

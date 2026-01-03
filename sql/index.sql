@@ -55,3 +55,9 @@ ON audit_log(table_name, operation);
 
 CREATE INDEX IF NOT EXISTS idx_audit_log_row_id
 ON audit_log(row_id);
+
+CREATE INDEX IF NOT EXISTS idx_fine_citizen
+ON fine(citizen_id);
+
+CREATE INDEX IF NOT EXISTS idx_audit_log_table_row
+ON audit_log(table_name, row_id);

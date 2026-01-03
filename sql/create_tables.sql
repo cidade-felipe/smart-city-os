@@ -30,11 +30,17 @@ CREATE TABLE IF NOT EXISTS citizen (
     email VARCHAR(255) UNIQUE NOT NULL,
     phone VARCHAR(20),
     address TEXT NOT NULL,
+    biometric_reference JSONB,
+    wallet_balance NUMERIC(10,2) DEFAULT 0.00,
+    debt NUMERIC(10,2) DEFAULT 0.00,
+    allowed BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT cpf CHECK (length(cpf) = 11),
     CONSTRAINT birth_date CHECK (birth_date <= CURRENT_DATE),
     CONSTRAINT email CHECK (email LIKE '%_@_%._%'),
+    CONSTRAINT chk_wallet_balance CHECK (wallet_balance >= 0),
+    CONSTRAINT chk_debt CHECK (debt >= 0),
     CONSTRAINT fk_user
       FOREIGN KEY (app_user_id)
       REFERENCES app_user(id)
@@ -107,7 +113,7 @@ CREATE TABLE IF NOT EXISTS vehicle_citizen (
 
 CREATE TABLE IF NOT EXISTS traffic_incident (
     id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    vehicle_id INTEGER NOT NULL,
+    vehicle_id INTEGER,
     sensor_id INTEGER NOT NULL,
     occurred_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     location TEXT,
@@ -117,7 +123,7 @@ CREATE TABLE IF NOT EXISTS traffic_incident (
     CONSTRAINT fk_vehicle
       FOREIGN KEY (vehicle_id)
       REFERENCES vehicle(id)
-      ON DELETE CASCADE,
+      ON DELETE SET NULL,
     CONSTRAINT fk_sensor
       FOREIGN KEY (sensor_id)
       REFERENCES sensor(id)
@@ -127,6 +133,7 @@ CREATE TABLE IF NOT EXISTS traffic_incident (
 CREATE TABLE IF NOT EXISTS fine (
     id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     traffic_incident_id INTEGER NOT NULL,
+    citizen_id INTEGER NOT NULL,
     amount NUMERIC(10,2) NOT NULL,
     status VARCHAR(20) DEFAULT 'pending',
     due_date DATE,
@@ -134,13 +141,17 @@ CREATE TABLE IF NOT EXISTS fine (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT chk_fine_amount CHECK (amount >= 0),
     CONSTRAINT chk_fine_status CHECK (
-        status IN ('pending', 'paid', 'cancelled','overdue')
+        status IN ('pending', 'paid', 'cancelled')
     ),
     CONSTRAINT fk_traffic_incident
       FOREIGN KEY (traffic_incident_id)
       REFERENCES traffic_incident(id)
+      ON DELETE CASCADE,
+    CONSTRAINT fk_citizen
+      FOREIGN KEY (citizen_id)
+      REFERENCES citizen(id)
       ON DELETE CASCADE
-);
+);  
 
 CREATE TABLE IF NOT EXISTS fine_payment (
     id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -198,3 +209,4 @@ CREATE TABLE IF NOT EXISTS audit_log (
       REFERENCES app_user(id)
       ON DELETE SET NULL
 );
+
