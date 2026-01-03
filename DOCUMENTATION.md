@@ -53,13 +53,6 @@ SmartCityOS/
 erDiagram
     app_user {
         int id PK
-        varchar first_name
-        varchar last_name
-        varchar cpf UK
-        date birth_date
-        varchar email UK
-        varchar phone
-        text address
         varchar username UK
         varchar password_hash
         timestamp created_at
@@ -69,6 +62,13 @@ erDiagram
     citizen {
         int id PK
         int app_user_id FK
+        varchar first_name
+        varchar last_name
+        varchar cpf UK
+        date birth_date
+        varchar email UK
+        varchar phone
+        text address
         jsonb biometric_reference
         numeric wallet_balance
         numeric debt
@@ -120,7 +120,6 @@ erDiagram
         int id PK
         int vehicle_id FK
         int sensor_id FK
-        numeric fine_amount
         timestamp occurred_at
         text location
         text description
@@ -210,37 +209,35 @@ erDiagram
 
 #### 1. `app_user`
 
-Tabela principal de usuários do sistema.
+Tabela principal de usuários do sistema com credenciais de autenticação.
 
 **Colunas:**
 
 - `id` (INTEGER, PRIMARY KEY) - Identificador único do usuário
-- `first_name` (VARCHAR(100), NOT NULL) - Primeiro nome do usuário
-- `last_name` (VARCHAR(150), NOT NULL) - Sobrenome do usuário
-- `cpf` (VARCHAR(11), UNIQUE, NOT NULL) - CPF do usuário
-- `birth_date` (DATE, NOT NULL) - Data de nascimento
-- `email` (VARCHAR(255), UNIQUE, NOT NULL) - Email do usuário
-- `phone` (VARCHAR(20)) - Telefone de contato
-- `address` (TEXT, NOT NULL) - Endereço completo
 - `username` (VARCHAR(255), UNIQUE, NOT NULL) - Nome de usuário para login
 - `password_hash` (VARCHAR(255), NOT NULL) - Hash da senha
 - `created_at` (TIMESTAMP) - Data de criação do registro
 - `updated_at` (TIMESTAMP) - Data da última atualização
 
-**Constraints:**
+**Observação:**
 
-- `cpf` - Garante que o CPF tenha 11 caracteres
-- `birth_date` - Garante que a data de nascimento seja anterior à data atual
-- `email` - Garante que o email seja válido
+- Dados pessoais como nome, CPF, email estão na tabela `citizen`
 
 #### 2. `citizen`
 
-Extensão do usuário com informações específicas de cidadão.
+Extensão do usuário com informações pessoais e financeiras do cidadão.
 
 **Colunas:**
 
 - `id` (INTEGER, PRIMARY KEY) - Identificador único do cidadão
 - `app_user_id` (INTEGER, NOT NULL) - Referência ao usuário (FK)
+- `first_name` (VARCHAR(100), NOT NULL) - Primeiro nome do cidadão
+- `last_name` (VARCHAR(150), NOT NULL) - Sobrenome do cidadão
+- `cpf` (VARCHAR(11), UNIQUE, NOT NULL) - CPF do cidadão
+- `birth_date` (DATE, NOT NULL) - Data de nascimento
+- `email` (VARCHAR(255), UNIQUE, NOT NULL) - Email do cidadão
+- `phone` (VARCHAR(20)) - Telefone de contato
+- `address` (TEXT, NOT NULL) - Endereço completo
 - `biometric_reference` (JSONB) - Dados biométricos para autenticação
 - `wallet_balance` (NUMERIC(10,2), DEFAULT 0.00) - Saldo da carteira digital
 - `debt` (NUMERIC(10,2), DEFAULT 0.00) - Dívida acumulada
@@ -250,6 +247,9 @@ Extensão do usuário com informações específicas de cidadão.
 
 **Constraints:**
 
+- `cpf` - Garante que o CPF tenha 11 caracteres
+- `birth_date` - Garante que a data de nascimento seja anterior à data atual
+- `email` - Garante que o email seja válido
 - `chk_wallet_balance` - Garante que o saldo não seja negativo
 - `chk_debt` - Garante que a dívida não seja negativa
 - `fk_user` - Chave estrangeira para `app_user`
@@ -337,7 +337,6 @@ Incidentes de trânsito detectados pelo sistema.
 - `id` (INTEGER, PRIMARY KEY) - Identificador único do incidente
 - `vehicle_id` (INTEGER, NOT NULL) - Veículo envolvido (FK)
 - `sensor_id` (INTEGER, NOT NULL) - Sensor que detectou (FK)
-- `fine_amount` (NUMERIC(10,2)) - Valor da multa para processamento automático
 - `occurred_at` (TIMESTAMP) - Data/hora do incidente
 - `location` (TEXT) - Localização do incidente
 - `description` (TEXT) - Descrição detalhada
@@ -348,6 +347,10 @@ Incidentes de trânsito detectados pelo sistema.
 
 - `fk_vehicle` - Chave estrangeira para `vehicle`
 - `fk_sensor` - Chave estrangeira para `sensor`
+
+**Observação:**
+
+- Valor da multa é definido na tabela `fine` relacionada
 
 #### 8. `fine`
 
@@ -453,32 +456,7 @@ Registro de auditoria do sistema.
 
 ## ⚡ Triggers e Funções
 
-### 1. `trigger_apply_fine`
-
-**Função:** `apply_fine_to_wallet()`
-**Evento:** AFTER INSERT ON `traffic_incident`
-**Descrição:** Aplica automaticamente multas à carteira do cidadão quando um incidente é criado.
-
-**Lógica:**
-
-- Identifica o cidadão proprietário do veículo
-- Verifica se há valor de multa definido em `traffic_incident.fine_amount`
-- Se o saldo for suficiente, deduz da carteira
-- Se insuficiente, zera o saldo, acumula como dívida e bloqueia acesso
-
-### 2. `trigger_apply_fine_payment`
-
-**Função:** `apply_fine_payment()`
-**Evento:** AFTER INSERT ON `fine_payment`
-**Descrição:** Processa pagamentos de multas e atualiza o status do cidadão.
-
-**Lógica:**
-
-- Reduz a dívida do cidadão pelo valor pago
-- Reativa o acesso quando a dívida for completamente paga
-- Atualiza timestamps automaticamente
-
-### 3. `audit_log_generic()`
+### 1. Triggers de Auditoria
 
 **Função:** `audit_log_generic()`
 **Evento:** AFTER INSERT OR UPDATE OR DELETE em múltiplas tabelas
@@ -491,18 +469,46 @@ Registro de auditoria do sistema.
 - Armazena valores antigos e novos em JSONB
 - Identifica usuário que realizou a operação
 
-### 4. Triggers de Auditoria
-
 **Tabelas com auditoria:**
 
 - `app_user` → `audit_app_user`
 - `citizen` → `audit_citizen`
 - `vehicle` → `audit_vehicle`
+- `sensor` → `audit_sensor`
 - `traffic_incident` → `audit_traffic_incident`
 - `fine` → `audit_fine`
 - `fine_payment` → `audit_fine_payment`
+- `app_user_notification` → `audit_app_user_notification`
 
 **Descrição:** Cada tabela possui um trigger que aciona a função `audit_log_generic()` para registrar todas as operações DML.
+
+### 2. Funções de Processamento de Multas (Disponíveis mas não implementadas como triggers)
+
+#### `apply_fine_to_wallet()`
+
+**Função:** `apply_fine_to_wallet()`
+**Evento:** AFTER INSERT ON `fine` (não implementado)
+**Descrição:** Função disponível para aplicar automaticamente multas à carteira do cidadão quando uma multa é criada.
+
+**Lógica:**
+
+- Identifica o cidadão proprietário do veículo através do relacionamento fine→traffic_incident→vehicle→citizen
+- Verifica se há valor de multa definido em `fine.amount`
+- Se o saldo for suficiente, deduz da carteira
+- Se insuficiente, zera o saldo, acumula como dívida e bloqueia acesso
+
+#### `apply_fine_payment()`
+
+**Função:** `apply_fine_payment()`
+**Evento:** AFTER INSERT ON `fine_payment` (não implementado)
+**Descrição:** Função disponível para processar pagamentos de multas e atualizar o status do cidadão.
+
+**Lógica:**
+
+- Reduz a dívida do cidadão pelo valor pago
+- Reativa o acesso quando a dívida for completamente paga
+- Atualiza status da multa para 'paid' quando totalmente paga
+- Atualiza timestamps automaticamente
 
 ## 🚀 Índices de Performance
 
@@ -586,10 +592,12 @@ pip install psycopg python-dotenv pandas tabulate
 
 1. Criar banco de dados PostgreSQL
 2. Executar os scripts SQL em ordem:
-   - `sql/create_tables.sql`
-   - `sql/trigger_functions.sql`
-   - `sql/triggers.sql`
-   - `sql/index.sql`
+   - `sql/create_tables.sql` - Criação das tabelas
+   - `sql/trigger_functions.sql` - Funções de trigger (apenas auditoria implementada)
+   - `sql/triggers.sql` - Triggers de auditoria (8 triggers implementados)
+   - `sql/index.sql` - Índices de performance (16 índices)
+
+**Importante:** As funções `apply_fine_to_wallet()` e `apply_fine_payment()` existem mas não estão conectadas como triggers. O processamento de multas deve ser feito via aplicação.
 
 ## 📊 Funcionalidades Principais
 
@@ -638,23 +646,31 @@ pip install psycopg python-dotenv pandas tabulate
 
 ## 🔄 Fluxo de Trabalho
 
-### Fluxo de Incidente de Trânsito
+### Fluxo de Incidente de Trânsito (Manual)
 
 1. Sensor detecta infração
 2. Sistema cria `traffic_incident`
-3. Trigger `apply_fine_to_wallet` é acionado
-4. Multa é aplicada à carteira do cidadão
-5. Se saldo insuficiente, vira dívida e acesso é bloqueado
-6. Notificação é gerada automaticamente
+3. Sistema cria `fine` manualmente (processo não automatizado)
+4. **Nota:** As funções `apply_fine_to_wallet()` e `apply_fine_payment()` existem mas não estão conectadas como triggers
+5. Multa precisa ser processada manualmente ou via aplicação
+6. Notificação pode ser gerada automaticamente
 
-### Fluxo de Pagamento
+### Fluxo de Pagamento (Manual)
 
 1. Cidadão realiza pagamento
 2. Registro em `fine_payment`
-3. Trigger `apply_fine_payment` é acionado
-4. Dívida é reduzida
-5. Se dívida zerada, acesso é reativado
-6. Auditoria registra operação
+3. **Nota:** O trigger `apply_fine_payment` não está implementado
+4. Dívida precisa ser atualizada manualmente ou via aplicação
+5. Reativação de acesso precisa ser feita manualmente
+6. Auditoria registra operação automaticamente
+
+### Fluxo de Auditoria (Automático)
+
+1. Qualquer operação DML em tabelas auditadas
+2. Trigger correspondente é acionado automaticamente
+3. Função `audit_log_generic()` registra em `audit_log`
+4. Dados anteriores e posteriores são armazenados
+5. Usuário da sessão é capturado via configuração
 
 ## 🧪 Testes e Exemplos
 
@@ -668,17 +684,23 @@ O notebook `smart_city_os.ipynb` contém funções para:
 
 ## 📈 Performance e Otimização
 
-### Índices Estratégicos
+### Índices Estratégicos Implementados
 
-- Índices parciais para consultas frequentes
-- Índices compostos para buscas complexas
-- Otimização para queries de tempo real
+- Índices parciais para consultas frequentes (veículos ativos, multas pendentes, notificações não lidas)
+- Índices compostos para buscas complexas (tabela + operação em auditoria)
+- Otimização para queries de tempo real (incidentes por período, pagamentos por data)
 
-### Triggers Eficientes
+### Triggers Implementados
 
-- Processamento automático no banco
-- Redução de round trips
-- Consistência garantida
+- **Auditoria completa**: 8 triggers implementados para registro automático
+- **Processamento de multas**: Funções disponíveis mas triggers não implementados
+- **Consistência garantida**: Auditoria captura todas as alterações automaticamente
+
+### Observações de Performance
+
+- Sistema atualmente depende de processamento via aplicação para multas
+- Auditoria adiciona overhead mínimo mas garante rastreabilidade completa
+- Índices parciais otimizam consultas comuns sem penalizar escritas
 
 ## 🔒 Segurança
 
