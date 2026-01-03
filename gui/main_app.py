@@ -17,7 +17,6 @@ from gui.styles import SmartCityStyles
 import pandas as pd
 
 
-
 # Carregar variáveis de ambiente
 load_dotenv()
 
@@ -515,23 +514,26 @@ class SmartCityOSGUI:
     def create_users_stat_card(self, parent, title, value, extra, color):
         card = tk.Frame(parent, bg=self.styles.colors['card'], relief='solid', bd=1)
         
-        # Título
-        title_label = tk.Label(card, text=title, 
-                              bg=self.styles.colors['card'], fg=self.styles.colors['text_secondary'],
-                              font=self.styles.fonts['small'])
-        title_label.pack(pady=(10, 5))
+        # Header
+        header = tk.Frame(card, bg=color, height=40)
+        header.pack(fill=tk.X)
+        header.grid_propagate(False)
         
-        # Valor principal
-        value_label = tk.Label(card, text=str(value), 
-                               bg=self.styles.colors['card'], fg=color,
-                               font=self.styles.fonts['title'])
-        value_label.pack()
+        title_label = tk.Label(header, text=title, bg=color, fg=self.styles.colors['white'],
+                              font=self.styles.fonts['normal'])
+        title_label.pack(pady=8)
         
-        # Extra
-        extra_label = tk.Label(card, text=extra, 
-                              bg=self.styles.colors['card'], fg=self.styles.colors['text_secondary'],
-                              font=self.styles.fonts['small'])
-        extra_label.pack(pady=(0, 10))
+        # Content
+        content = tk.Frame(card, bg=self.styles.colors['card'])
+        content.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        value_label = tk.Label(content, text=str(value), bg=self.styles.colors['card'],
+                              fg=color, font=('Segoe UI', 24, 'bold'))
+        value_label.pack(anchor='w')
+        
+        extra_label = tk.Label(content, text=extra, bg=self.styles.colors['card'],
+                               fg=self.styles.colors['text_secondary'], font=self.styles.fonts['small'])
+        extra_label.pack(anchor='w', pady=(2, 0))
         
         return card
         
@@ -796,23 +798,26 @@ class SmartCityOSGUI:
     def create_citizens_stat_card(self, parent, title, value, extra, color):
         card = tk.Frame(parent, bg=self.styles.colors['card'], relief='solid', bd=1)
         
-        # Título
-        title_label = tk.Label(card, text=title, 
-                              bg=self.styles.colors['card'], fg=self.styles.colors['text_secondary'],
-                              font=self.styles.fonts['small'])
-        title_label.pack(pady=(10, 5))
+        # Header
+        header = tk.Frame(card, bg=color, height=40)
+        header.pack(fill=tk.X)
+        header.grid_propagate(False)
         
-        # Valor principal
-        value_label = tk.Label(card, text=str(value), 
-                               bg=self.styles.colors['card'], fg=color,
-                               font=self.styles.fonts['title'])
-        value_label.pack()
+        title_label = tk.Label(header, text=title, bg=color, fg=self.styles.colors['white'],
+                              font=self.styles.fonts['normal'])
+        title_label.pack(pady=8)
         
-        # Extra
-        extra_label = tk.Label(card, text=extra, 
-                              bg=self.styles.colors['card'], fg=self.styles.colors['text_secondary'],
-                              font=self.styles.fonts['small'])
-        extra_label.pack(pady=(0, 10))
+        # Content
+        content = tk.Frame(card, bg=self.styles.colors['card'])
+        content.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        value_label = tk.Label(content, text=str(value), bg=self.styles.colors['card'],
+                              fg=color, font=('Segoe UI', 24, 'bold'))
+        value_label.pack(anchor='w')
+        
+        extra_label = tk.Label(content, text=extra, bg=self.styles.colors['card'],
+                               fg=self.styles.colors['text_secondary'], font=self.styles.fonts['small'])
+        extra_label.pack(anchor='w', pady=(2, 0))
         
         return card
         
@@ -1080,23 +1085,26 @@ class SmartCityOSGUI:
     def create_vehicles_stat_card(self, parent, title, value, extra, color):
         card = tk.Frame(parent, bg=self.styles.colors['card'], relief='solid', bd=1)
         
-        # Título
-        title_label = tk.Label(card, text=title, 
-                              bg=self.styles.colors['card'], fg=self.styles.colors['text_secondary'],
-                              font=self.styles.fonts['small'])
-        title_label.pack(pady=(10, 5))
+        # Header
+        header = tk.Frame(card, bg=color, height=40)
+        header.pack(fill=tk.X)
+        header.grid_propagate(False)
         
-        # Valor principal
-        value_label = tk.Label(card, text=str(value), 
-                               bg=self.styles.colors['card'], fg=color,
-                               font=self.styles.fonts['title'])
-        value_label.pack()
+        title_label = tk.Label(header, text=title, bg=color, fg=self.styles.colors['white'],
+                              font=self.styles.fonts['normal'])
+        title_label.pack(pady=8)
         
-        # Extra
-        extra_label = tk.Label(card, text=extra, 
-                              bg=self.styles.colors['card'], fg=self.styles.colors['text_secondary'],
-                              font=self.styles.fonts['small'])
-        extra_label.pack(pady=(0, 10))
+        # Content
+        content = tk.Frame(card, bg=self.styles.colors['card'])
+        content.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        value_label = tk.Label(content, text=str(value), bg=self.styles.colors['card'],
+                              fg=color, font=('Segoe UI', 24, 'bold'))
+        value_label.pack(anchor='w')
+        
+        extra_label = tk.Label(content, text=extra, bg=self.styles.colors['card'],
+                               fg=self.styles.colors['text_secondary'], font=self.styles.fonts['small'])
+        extra_label.pack(anchor='w', pady=(2, 0))
         
         return card
         
@@ -1157,8 +1165,7 @@ class SmartCityOSGUI:
         info_label = tk.Label(info_frame, text=f"🚗 {len(vehicles)} veículos registrados",
                             bg=self.styles.colors['background'], fg=self.styles.colors['text_secondary'],
                             font=self.styles.fonts['small'])
-        info_label.pack(side=tk.LEFT)
-        
+        info_label.pack(side=tk.LEFT)        
         
     def show_sensors(self):
         self.clear_content()
@@ -1288,23 +1295,26 @@ class SmartCityOSGUI:
     def create_sensors_stat_card(self, parent, title, value, extra, color):
         card = tk.Frame(parent, bg=self.styles.colors['card'], relief='solid', bd=1)
         
-        # Título
-        title_label = tk.Label(card, text=title, 
-                              bg=self.styles.colors['card'], fg=self.styles.colors['text_secondary'],
-                              font=self.styles.fonts['small'])
-        title_label.pack(pady=(10, 5))
+        # Header
+        header = tk.Frame(card, bg=color, height=40)
+        header.pack(fill=tk.X)
+        header.grid_propagate(False)
         
-        # Valor principal
-        value_label = tk.Label(card, text=str(value), 
-                               bg=self.styles.colors['card'], fg=color,
-                               font=self.styles.fonts['title'])
-        value_label.pack()
+        title_label = tk.Label(header, text=title, bg=color, fg=self.styles.colors['white'],
+                              font=self.styles.fonts['normal'])
+        title_label.pack(pady=8)
         
-        # Extra
-        extra_label = tk.Label(card, text=extra, 
-                              bg=self.styles.colors['card'], fg=self.styles.colors['text_secondary'],
-                              font=self.styles.fonts['small'])
-        extra_label.pack(pady=(0, 10))
+        # Content
+        content = tk.Frame(card, bg=self.styles.colors['card'])
+        content.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        value_label = tk.Label(content, text=str(value), bg=self.styles.colors['card'],
+                              fg=color, font=('Segoe UI', 24, 'bold'))
+        value_label.pack(anchor='w')
+        
+        extra_label = tk.Label(content, text=extra, bg=self.styles.colors['card'],
+                               fg=self.styles.colors['text_secondary'], font=self.styles.fonts['small'])
+        extra_label.pack(anchor='w', pady=(2, 0))
         
         return card
         
@@ -1531,6 +1541,9 @@ class SmartCityOSGUI:
                     # Armazenar dados originais para filtros
                     self.all_incidents = incidents
                     
+                    # Cards de estatísticas
+                    self.create_incidents_stats(incidents)
+                    
                     # Tabela de incidentes
                     self.create_incidents_table(incidents)
                     
@@ -1600,6 +1613,65 @@ class SmartCityOSGUI:
                             bg=self.styles.colors['background'], fg=self.styles.colors['text_secondary'],
                             font=self.styles.fonts['small'])
         info_label.pack(side=tk.LEFT)
+        
+    def create_incidents_stats(self, incidents):
+        """Cria cards de estatísticas para incidentes"""
+        try:
+            # Calcular estatísticas
+            total_incidents = len(incidents)
+            
+            # Incidentes esta semana
+            from datetime import datetime, timedelta
+            week_ago = datetime.now() - timedelta(days=7)
+            this_week_incidents = len([i for i in incidents if i['occurred_at'] and i['occurred_at'] >= week_ago])
+            
+            # Total de multas geradas
+            total_fines = sum(i['fine_count'] or 0 for i in incidents)
+            total_fines_amount = sum(i['total_fines'] or 0 for i in incidents)
+            
+            # Frame de estatísticas
+            stats_frame = tk.Frame(self.content_frame, bg=self.styles.colors['background'])
+            stats_frame.pack(fill=tk.X, padx=20, pady=(10, 20))
+            
+            # Cards
+            cards_data = [
+                ("⚠️ Total Incidentes", total_incidents, f"{this_week_incidents} esta semana", self.styles.colors['accent']),
+                ("💰 Multas Geradas", total_fines, f"R$ {total_fines_amount:,.2f}", self.styles.colors['secondary']),
+                ("📊 Média/Dia", f"{total_incidents/30:.1f}" if total_incidents > 0 else "0", "Últimos 30 dias", self.styles.colors['primary'])
+            ]
+            
+            for i, (title, value, extra, color) in enumerate(cards_data):
+                card = self.create_incidents_stat_card(stats_frame, title, value, extra, color)
+                card.pack(side=tk.LEFT, padx=10, fill=tk.BOTH, expand=True)
+        except Exception as e:
+            print(f"Erro ao criar estatísticas de incidentes: {e}")
+            # Não mostrar erro ao usuário, apenas não criar os stats
+            
+    def create_incidents_stat_card(self, parent, title, value, extra, color):
+        card = tk.Frame(parent, bg=self.styles.colors['card'], relief='solid', bd=1)
+        
+        # Header
+        header = tk.Frame(card, bg=color, height=40)
+        header.pack(fill=tk.X)
+        header.grid_propagate(False)
+        
+        title_label = tk.Label(header, text=title, bg=color, fg=self.styles.colors['white'],
+                              font=self.styles.fonts['normal'])
+        title_label.pack(pady=8)
+        
+        # Content
+        content = tk.Frame(card, bg=self.styles.colors['card'])
+        content.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        value_label = tk.Label(content, text=str(value), bg=self.styles.colors['card'],
+                              fg=color, font=('Segoe UI', 24, 'bold'))
+        value_label.pack(anchor='w')
+        
+        extra_label = tk.Label(content, text=extra, bg=self.styles.colors['card'],
+                               fg=self.styles.colors['text_secondary'], font=self.styles.fonts['small'])
+        extra_label.pack(anchor='w', pady=(2, 0))
+        
+        return card
         
     def filter_incidents(self):
         """Filtra incidentes baseado nos critérios selecionados"""
@@ -2045,6 +2117,7 @@ class SmartCityOSGUI:
         try:
             with psy.connect(self.get_connection_string()) as conn:
                 with conn.cursor(row_factory=dict_row) as cur:
+                    
                     # Header estilizado
                     header_frame = tk.Frame(self.content_frame, bg=self.styles.colors['card'])
                     header_frame.pack(fill=tk.X, padx=20, pady=(20, 10))
