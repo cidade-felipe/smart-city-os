@@ -349,7 +349,7 @@ class SmartCityOSGUI:
         refresh_btn = tk.Button(header_frame, text="🔄 Atualizar", command=self.show_dashboard,
                                bg=self.styles.colors['success'], fg=self.styles.colors['white'],
                                font=self.styles.fonts['button'], relief='flat',
-                               padx=15, pady=8, cursor='hand2')
+                               padx=20, pady=10, cursor='hand2')
         refresh_btn.pack(side=tk.RIGHT, padx=20, pady=15)
         
         # Grid de estatísticas com cards
@@ -448,12 +448,11 @@ class SmartCityOSGUI:
         try:
             with psy.connect(self.get_connection_string()) as conn:
                 with conn.cursor(row_factory=dict_row) as cur:
-                    # Query para usuários
+                    # Query para usuários (apenas credenciais)
                     cur.execute("""
-                        SELECT id, first_name, last_name, email, cpf, phone, 
-                               address, birth_date, username, created_at
+                        SELECT id, username, created_at, updated_at
                         FROM app_user
-                        ORDER BY first_name, last_name
+                        ORDER BY username
                     """)
                     users = cur.fetchall()
                     
@@ -461,32 +460,18 @@ class SmartCityOSGUI:
                     header_frame = tk.Frame(self.content_frame, bg=self.styles.colors['card'])
                     header_frame.pack(fill=tk.X, padx=20, pady=(20, 10))
                     
+                    # Título
                     title_label = tk.Label(header_frame, text="👤 Gestão de Usuários", 
                                           bg=self.styles.colors['card'], fg=self.styles.colors['text_primary'],
                                           font=self.styles.fonts['title'])
                     title_label.pack(side=tk.LEFT, padx=20, pady=15)
                     
-                    # Botões de ação
-                    button_frame = tk.Frame(header_frame, bg=self.styles.colors['card'])
-                    button_frame.pack(side=tk.RIGHT, padx=20, pady=15)
-                    
-                    add_btn = tk.Button(button_frame, text="➕ Adicionar Usuário", command=lambda: messagebox.showinfo("Em breve", "Funcionalidade de adicionar usuário em desenvolvimento!"),
-                                      bg=self.styles.colors['success'], fg=self.styles.colors['white'],
-                                      font=self.styles.fonts['button'], relief='flat',
-                                      padx=12, pady=6, cursor='hand2')
-                    add_btn.pack(side=tk.RIGHT, padx=5)
-                    
-                    search_btn = tk.Button(button_frame, text="🔍 Buscar por Email", command=lambda: messagebox.showinfo("Em breve", "Funcionalidade de busca em desenvolvimento!"),
-                                         bg=self.styles.colors['primary'], fg=self.styles.colors['white'],
-                                         font=self.styles.fonts['button'], relief='flat',
-                                         padx=12, pady=6, cursor='hand2')
-                    search_btn.pack(side=tk.RIGHT, padx=5)
-                    
-                    refresh_btn = tk.Button(button_frame, text="🔄 Atualizar", command=self.show_users,
+                    # Botão de atualizar
+                    refresh_btn = tk.Button(header_frame, text="🔄 Atualizar", command=self.show_users,
                                           bg=self.styles.colors['secondary'], fg=self.styles.colors['white'],
                                           font=self.styles.fonts['button'], relief='flat',
-                                          padx=12, pady=6, cursor='hand2')
-                    refresh_btn.pack(side=tk.RIGHT, padx=5)
+                                          padx=15, pady=8, cursor='hand2')
+                    refresh_btn.pack(side=tk.RIGHT, padx=20, pady=15)
                     
                     # Cards de estatísticas
                     self.create_users_stats(users)
@@ -502,9 +487,12 @@ class SmartCityOSGUI:
             # Calcular estatísticas
             total_users = len(users)
             
-            # Contar usuários com email e telefone
-            users_with_email = len([u for u in users if u['email']]) if users else 0
-            users_with_phone = len([u for u in users if u['phone']]) if users else 0
+            # Contar usuários por período de criação
+            if users:
+                recent_users = len([u for u in users if u['created_at'] and 
+                                  (datetime.now() - u['created_at']).days <= 30])
+            else:
+                recent_users = 0
             
             # Frame de estatísticas
             stats_frame = tk.Frame(self.content_frame, bg=self.styles.colors['background'])
@@ -513,8 +501,8 @@ class SmartCityOSGUI:
             # Cards
             cards_data = [
                 ("👤 Total Usuários", total_users, f"100%", self.styles.colors['primary']),
-                ("📧 Com Email", users_with_email, f"{(users_with_email/total_users*100):.1f}%" if total_users > 0 else "0%", self.styles.colors['success']),
-                ("📱 Com Telefone", users_with_phone, f"{(users_with_phone/total_users*100):.1f}%" if total_users > 0 else "0%", self.styles.colors['warning'])
+                ("🆕 Novos (30 dias)", recent_users, f"{(recent_users/total_users*100):.1f}%" if total_users > 0 else "0%", self.styles.colors['success']),
+                ("🔐 Credenciais", total_users, "Apenas login/senha", self.styles.colors['warning'])
             ]
             
             for i, (title, value, extra, color) in enumerate(cards_data):
@@ -536,7 +524,7 @@ class SmartCityOSGUI:
         # Valor principal
         value_label = tk.Label(card, text=str(value), 
                                bg=self.styles.colors['card'], fg=color,
-                               font=self.styles.fonts['header'])
+                               font=self.styles.fonts['title'])
         value_label.pack()
         
         # Extra
@@ -553,20 +541,16 @@ class SmartCityOSGUI:
         table_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=(0, 20))
         
         # Treeview para usuários
-        columns = ('ID', 'Nome', 'Email', 'CPF', 'Telefone', 'Endereço', 'Nascimento', 'Cadastro')
-        self.users_tree = ttk.Treeview(table_frame, columns=columns, show='headings', height=15)
+        columns = ('ID', 'Username', 'Criado em', 'Atualizado em')
+        self.users_tree = ttk.Treeview(table_frame, columns=columns, show='headings', style='Users.Treeview')
         
         # Configurar colunas
         for col in columns:
             self.users_tree.heading(col, text=col)
             if col == 'ID':
                 self.users_tree.column(col, width=50)
-            elif col in ['CPF', 'Telefone']:
-                self.users_tree.column(col, width=120)
-            elif col == 'Nascimento':
-                self.users_tree.column(col, width=100)
-            elif col == 'Cadastro':
-                self.users_tree.column(col, width=100)
+            elif col == 'Username':
+                self.users_tree.column(col, width=200)
             else:
                 self.users_tree.column(col, width=150)
                 
@@ -585,35 +569,29 @@ class SmartCityOSGUI:
         
         # Inserir dados
         for user in users:
-            full_name = f"{user['first_name']} {user['last_name']}"
-            
             # Tratar datas de forma segura
-            if user['birth_date'] and hasattr(user['birth_date'], 'strftime'):
-                birth_date = user['birth_date'].strftime('%d/%m/%Y')
-            else:
-                birth_date = 'N/A'
-                
             if user['created_at'] and hasattr(user['created_at'], 'strftime'):
-                created_date = user['created_at'].strftime('%d/%m/%Y')
+                created_date = user['created_at'].strftime('%d/%m/%Y %H:%M')
             else:
                 created_date = 'N/A'
+                
+            if user['updated_at'] and hasattr(user['updated_at'], 'strftime'):
+                updated_date = user['updated_at'].strftime('%d/%m/%Y %H:%M')
+            else:
+                updated_date = 'N/A'
             
             self.users_tree.insert('', tk.END, values=(
                 user['id'],
-                full_name,
-                user['email'],
-                user['cpf'] or 'N/A',
-                user['phone'] or 'N/A',
-                user['address'][:30] + '...' if user['address'] and len(user['address']) > 30 else user['address'] or 'N/A',
-                birth_date,
-                created_date
+                user['username'],
+                created_date,
+                updated_date
             ))
             
         # Frame de informações
         info_frame = tk.Frame(self.content_frame, bg=self.styles.colors['background'])
         info_frame.pack(fill=tk.X, padx=20, pady=(0, 20))
         
-        info_label = tk.Label(info_frame, text=f"👤 {len(users)} usuários registrados",
+        info_label = tk.Label(info_frame, text=f"👤 {len(users)} usuários registrados (apenas credenciais)",
                             bg=self.styles.colors['background'], fg=self.styles.colors['text_secondary'],
                             font=self.styles.fonts['small'])
         info_label.pack(side=tk.LEFT)
@@ -628,13 +606,14 @@ class SmartCityOSGUI:
         try:
             with psy.connect(self.get_connection_string()) as conn:
                 with conn.cursor(row_factory=dict_row) as cur:
-                    # Query para cidadãos com JOIN em app_user
+                    # Query para cidadãos (dados pessoais estão na tabela citizen)
                     cur.execute("""
-                        SELECT c.id, u.first_name, u.last_name, u.email, u.cpf, 
-                               c.wallet_balance, c.debt, c.allowed
+                        SELECT c.id, c.first_name, c.last_name, c.email, c.cpf, c.phone,
+                               c.address, c.birth_date, c.wallet_balance, c.debt, c.allowed,
+                               u.username, c.created_at
                         FROM citizen c
                         JOIN app_user u ON c.app_user_id = u.id
-                        ORDER BY u.first_name, u.last_name
+                        ORDER BY c.first_name, c.last_name
                     """)
                     citizens = cur.fetchall()
                     
@@ -647,27 +626,66 @@ class SmartCityOSGUI:
                                           font=self.styles.fonts['title'])
                     title_label.pack(side=tk.LEFT, padx=20, pady=15)
                     
-                    # Botões de ação
-                    button_frame = tk.Frame(header_frame, bg=self.styles.colors['card'])
-                    button_frame.pack(side=tk.RIGHT, padx=20, pady=15)
+                    # Frame de filtros para cidadãos
+                    filter_frame = tk.Frame(header_frame, bg=self.styles.colors['card'])
+                    filter_frame.pack(side=tk.RIGHT, padx=20, pady=15)
                     
-                    add_btn = tk.Button(button_frame, text="➕ Adicionar Cidadão", command=lambda: messagebox.showinfo("Em breve", "Funcionalidade de adicionar cidadão em desenvolvimento!"),
+                    # Filtro por nome
+                    tk.Label(filter_frame, text="🔍 Nome:", bg=self.styles.colors['card'], 
+                            fg=self.styles.colors['text_secondary'], font=self.styles.fonts['small']).pack(side=tk.LEFT, padx=(0, 5))
+                    
+                    self.citizen_name_var = tk.StringVar()
+                    self.citizen_name_var.trace('w', lambda *args: self.filter_citizens())
+                    name_entry = tk.Entry(filter_frame, textvariable=self.citizen_name_var, 
+                                      font=self.styles.fonts['normal'], width=20)
+                    name_entry.pack(side=tk.LEFT, padx=5)
+                    
+                    # Filtro por CPF
+                    tk.Label(filter_frame, text="📋 CPF:", bg=self.styles.colors['card'], 
+                            fg=self.styles.colors['text_secondary'], font=self.styles.fonts['small']).pack(side=tk.LEFT, padx=(10, 5))
+                    
+                    self.citizen_cpf_var = tk.StringVar()
+                    self.citizen_cpf_var.trace('w', lambda *args: self.filter_citizens())
+                    cpf_entry = tk.Entry(filter_frame, textvariable=self.citizen_cpf_var, 
+                                     font=self.styles.fonts['normal'], width=15)
+                    cpf_entry.pack(side=tk.LEFT, padx=5)
+                    
+                    # Filtro por status
+                    tk.Label(filter_frame, text="Status:", bg=self.styles.colors['card'], 
+                            fg=self.styles.colors['text_secondary'], font=self.styles.fonts['small']).pack(side=tk.LEFT, padx=(10, 5))
+                    
+                    self.citizen_status_var = tk.StringVar(value="Todos")
+                    status_combo = ttk.Combobox(filter_frame, textvariable=self.citizen_status_var, 
+                                            values=["Todos", "Ativos", "Inativos"], width=10, state="readonly")
+                    status_combo.pack(side=tk.LEFT, padx=5)
+                    status_combo.bind('<<ComboboxSelected>>', lambda e: self.filter_citizens())
+                    
+                    # Filtro por dívida
+                    tk.Label(filter_frame, text="💳 Dívida:", bg=self.styles.colors['card'], 
+                            fg=self.styles.colors['text_secondary'], font=self.styles.fonts['small']).pack(side=tk.LEFT, padx=(10, 5))
+                    
+                    self.citizen_debt_var = tk.StringVar(value="Todos")
+                    debt_combo = ttk.Combobox(filter_frame, textvariable=self.citizen_debt_var, 
+                                           values=["Todos", "Com Dívida", "Sem Dívida"], width=12, state="readonly")
+                    debt_combo.pack(side=tk.LEFT, padx=5)
+                    debt_combo.bind('<<ComboboxSelected>>', lambda e: self.filter_citizens())
+                    
+                    # Botões de ação
+                    add_btn = tk.Button(filter_frame, text="➕ Adicionar", command=self.add_citizen_dialog,
                                       bg=self.styles.colors['success'], fg=self.styles.colors['white'],
                                       font=self.styles.fonts['button'], relief='flat',
-                                      padx=12, pady=6, cursor='hand2')
-                    add_btn.pack(side=tk.RIGHT, padx=5)
+                                      padx=10, pady=8, cursor='hand2')
+                    add_btn.pack(side=tk.LEFT, padx=5)
                     
-                    search_btn = tk.Button(button_frame, text="🔍 Buscar por CPF", command=lambda: messagebox.showinfo("Em breve", "Funcionalidade de busca em desenvolvimento!"),
-                                         bg=self.styles.colors['primary'], fg=self.styles.colors['white'],
-                                         font=self.styles.fonts['button'], relief='flat',
-                                         padx=12, pady=6, cursor='hand2')
-                    search_btn.pack(side=tk.RIGHT, padx=5)
-                    
-                    refresh_btn = tk.Button(button_frame, text="🔄 Atualizar", command=self.show_citizens,
+                    # Botão de atualizar
+                    refresh_btn = tk.Button(filter_frame, text="🔄 Atualizar", command=self.show_citizens,
                                           bg=self.styles.colors['secondary'], fg=self.styles.colors['white'],
                                           font=self.styles.fonts['button'], relief='flat',
-                                          padx=12, pady=6, cursor='hand2')
-                    refresh_btn.pack(side=tk.RIGHT, padx=5)
+                                          padx=10, pady=8, cursor='hand2')
+                    refresh_btn.pack(side=tk.LEFT, padx=5)
+                    
+                    # Armazenar dados originais para filtros
+                    self.all_citizens = citizens
                     
                     self.create_citizens_stats(citizens)
                     # Tabela de cidadãos
@@ -676,6 +694,78 @@ class SmartCityOSGUI:
         except Exception as e:
             messagebox.showerror("Erro", f"Erro ao carregar cidadãos: {str(e)}")
             
+    def filter_citizens(self):
+        """Filtra cidadãos baseado nos critérios selecionados"""
+        if not hasattr(self, 'all_citizens'):
+            return
+            
+        filtered_citizens = self.all_citizens.copy()
+        
+        # Filtro por nome
+        name_filter = self.citizen_name_var.get().lower().strip()
+        if name_filter:
+            filtered_citizens = [
+                c for c in filtered_citizens 
+                if (c['first_name'] and name_filter in c['first_name'].lower()) or
+                   (c['last_name'] and name_filter in c['last_name'].lower())
+            ]
+        
+        # Filtro por CPF
+        cpf_filter = self.citizen_cpf_var.get().strip()
+        if cpf_filter:
+            filtered_citizens = [
+                c for c in filtered_citizens 
+                if c['cpf'] and cpf_filter in c['cpf']
+            ]
+        
+        # Filtro por status
+        status_filter = self.citizen_status_var.get()
+        if status_filter == "Ativos":
+            filtered_citizens = [c for c in filtered_citizens if c['allowed']]
+        elif status_filter == "Inativos":
+            filtered_citizens = [c for c in filtered_citizens if not c['allowed']]
+        
+        # Filtro por dívida
+        debt_filter = self.citizen_debt_var.get()
+        if debt_filter == "Com Dívida":
+            filtered_citizens = [c for c in filtered_citizens if c['debt'] and c['debt'] > 0]
+        elif debt_filter == "Sem Dívida":
+            filtered_citizens = [c for c in filtered_citizens if not c['debt'] or c['debt'] == 0]
+        
+        # Atualizar tabela com dados filtrados
+        self.update_citizens_table(filtered_citizens)
+        
+    def update_citizens_table(self, citizens):
+        """Atualiza apenas a tabela de cidadãos sem recarregar tudo"""
+        # Limpar tabela atual
+        for item in self.citizens_tree.get_children():
+            self.citizens_tree.delete(item)
+        
+        # Inserir dados filtrados
+        for citizen in citizens:
+            full_name = f"{citizen['first_name']} {citizen['last_name']}"
+            status = "✅ Ativo" if citizen['allowed'] else "🔴 Inativo"
+            
+            self.citizens_tree.insert('', tk.END, values=(
+                citizen['id'],
+                full_name,
+                citizen['email'] or 'N/A',
+                citizen['cpf'] or 'N/A',
+                citizen['phone'] or 'N/A',
+                f"R$ {citizen['wallet_balance']:,.2f}" if citizen['wallet_balance'] else 'R$ 0,00',
+                f"R$ {citizen['debt']:,.2f}" if citizen['debt'] else 'R$ 0,00',
+                status,
+                citizen['username'] or 'N/A'
+            ))
+        
+        # Atualizar contador
+        for widget in self.content_frame.winfo_children():
+            if isinstance(widget, tk.Frame) and widget.winfo_children():
+                for child in widget.winfo_children():
+                    if isinstance(child, tk.Label) and "cidadãos registrados" in child.cget("text"):
+                        child.config(text=f"👥 {len(citizens)} cidadãos registrados ({len(self.all_citizens)} total)")
+                        break
+                        
     def create_citizens_stats(self, citizens):
         try:
             # Calcular estatísticas
@@ -715,7 +805,7 @@ class SmartCityOSGUI:
         # Valor principal
         value_label = tk.Label(card, text=str(value), 
                                bg=self.styles.colors['card'], fg=color,
-                               font=self.styles.fonts['header'])
+                               font=self.styles.fonts['title'])
         value_label.pack()
         
         # Extra
@@ -732,8 +822,8 @@ class SmartCityOSGUI:
         table_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=(0, 20))
         
         # Treeview para cidadãos
-        columns = ('ID', 'Nome', 'Email', 'CPF', 'Saldo', 'Dívida', 'Status')
-        self.citizens_tree = ttk.Treeview(table_frame, columns=columns, show='headings', height=15)
+        columns = ('ID', 'Nome', 'Email', 'CPF', 'Telefone', 'Saldo', 'Dívida', 'Status', 'Username')
+        self.citizens_tree = ttk.Treeview(table_frame, columns=columns, show='headings', style='Citizens.Treeview')
         
         # Configurar colunas
         for col in columns:
@@ -742,6 +832,12 @@ class SmartCityOSGUI:
                 self.citizens_tree.column(col, width=50)
             elif col in ['Saldo', 'Dívida']:
                 self.citizens_tree.column(col, width=100)
+            elif col == 'Username':
+                self.citizens_tree.column(col, width=120)
+            elif col == 'CPF':
+                self.citizens_tree.column(col, width=120)
+            elif col == 'Telefone':
+                self.citizens_tree.column(col, width=120)
             else:
                 self.citizens_tree.column(col, width=150)
                 
@@ -768,9 +864,11 @@ class SmartCityOSGUI:
                 full_name,
                 citizen['email'] or 'N/A',
                 citizen['cpf'] or 'N/A',
+                citizen['phone'] or 'N/A',
                 f"R$ {citizen['wallet_balance']:,.2f}" if citizen['wallet_balance'] else 'R$ 0,00',
                 f"R$ {citizen['debt']:,.2f}" if citizen['debt'] else 'R$ 0,00',
-                status
+                status,
+                citizen['username'] or 'N/A'
             ))
             
         # Frame de informações
@@ -795,7 +893,7 @@ class SmartCityOSGUI:
                     # Query para veículos com JOIN em app_user e citizen
                     cur.execute("""
                         SELECT v.id, v.license_plate, v.model, v.year, v.allowed,
-                               u.first_name, u.last_name
+                               u.username, c.first_name, c.last_name
                         FROM vehicle v
                         JOIN app_user u ON v.app_user_id = u.id
                         LEFT JOIN citizen c ON v.citizen_id = c.id
@@ -812,27 +910,66 @@ class SmartCityOSGUI:
                                           font=self.styles.fonts['title'])
                     title_label.pack(side=tk.LEFT, padx=20, pady=15)
                     
-                    # Botões de ação
-                    button_frame = tk.Frame(header_frame, bg=self.styles.colors['card'])
-                    button_frame.pack(side=tk.RIGHT, padx=20, pady=15)
+                    # Frame de filtros para veículos
+                    filter_frame = tk.Frame(header_frame, bg=self.styles.colors['card'])
+                    filter_frame.pack(side=tk.RIGHT, padx=20, pady=15)
                     
-                    add_btn = tk.Button(button_frame, text="➕ Adicionar Veículo", command=lambda: messagebox.showinfo("Em breve", "Funcionalidade de adicionar veículo em desenvolvimento!"),
+                    # Filtro por placa
+                    tk.Label(filter_frame, text="🔍 Placa:", bg=self.styles.colors['card'], 
+                            fg=self.styles.colors['text_secondary'], font=self.styles.fonts['small']).pack(side=tk.LEFT, padx=(0, 5))
+                    
+                    self.vehicle_plate_var = tk.StringVar()
+                    self.vehicle_plate_var.trace('w', lambda *args: self.filter_vehicles())
+                    plate_entry = tk.Entry(filter_frame, textvariable=self.vehicle_plate_var, 
+                                       font=self.styles.fonts['normal'], width=15)
+                    plate_entry.pack(side=tk.LEFT, padx=5)
+                    
+                    # Filtro por modelo
+                    tk.Label(filter_frame, text="🚗 Modelo:", bg=self.styles.colors['card'], 
+                            fg=self.styles.colors['text_secondary'], font=self.styles.fonts['small']).pack(side=tk.LEFT, padx=(10, 5))
+                    
+                    self.vehicle_model_var = tk.StringVar()
+                    self.vehicle_model_var.trace('w', lambda *args: self.filter_vehicles())
+                    model_entry = tk.Entry(filter_frame, textvariable=self.vehicle_model_var, 
+                                       font=self.styles.fonts['normal'], width=15)
+                    model_entry.pack(side=tk.LEFT, padx=5)
+                    
+                    # Filtro por status
+                    tk.Label(filter_frame, text="Status:", bg=self.styles.colors['card'], 
+                            fg=self.styles.colors['text_secondary'], font=self.styles.fonts['small']).pack(side=tk.LEFT, padx=(10, 5))
+                    
+                    self.vehicle_status_var = tk.StringVar(value="Todos")
+                    status_combo = ttk.Combobox(filter_frame, textvariable=self.vehicle_status_var, 
+                                            values=["Todos", "Ativos", "Inativos"], width=10, state="readonly")
+                    status_combo.pack(side=tk.LEFT, padx=5)
+                    status_combo.bind('<<ComboboxSelected>>', lambda e: self.filter_vehicles())
+                    
+                    # Filtro por ano
+                    tk.Label(filter_frame, text="📅 Ano:", bg=self.styles.colors['card'], 
+                            fg=self.styles.colors['text_secondary'], font=self.styles.fonts['small']).pack(side=tk.LEFT, padx=(10, 5))
+                    
+                    self.vehicle_year_var = tk.StringVar()
+                    self.vehicle_year_var.trace('w', lambda *args: self.filter_vehicles())
+                    year_entry = tk.Entry(filter_frame, textvariable=self.vehicle_year_var, 
+                                      font=self.styles.fonts['normal'], width=8)
+                    year_entry.pack(side=tk.LEFT, padx=5)
+                    
+                    # Botões de ação
+                    add_btn = tk.Button(filter_frame, text="➕ Adicionar", command=self.add_vehicle_dialog,
                                       bg=self.styles.colors['success'], fg=self.styles.colors['white'],
                                       font=self.styles.fonts['button'], relief='flat',
-                                      padx=12, pady=6, cursor='hand2')
-                    add_btn.pack(side=tk.RIGHT, padx=5)
+                                      padx=10, pady=8, cursor='hand2')
+                    add_btn.pack(side=tk.LEFT, padx=5)
                     
-                    search_btn = tk.Button(button_frame, text="🔍 Buscar por Placa", command=lambda: messagebox.showinfo("Em breve", "Funcionalidade de busca em desenvolvimento!"),
-                                         bg=self.styles.colors['primary'], fg=self.styles.colors['white'],
-                                         font=self.styles.fonts['button'], relief='flat',
-                                         padx=12, pady=6, cursor='hand2')
-                    search_btn.pack(side=tk.RIGHT, padx=5)
-                    
-                    refresh_btn = tk.Button(button_frame, text="� Atualizar", command=self.show_vehicles,
+                    # Botão de atualizar
+                    refresh_btn = tk.Button(filter_frame, text="🔄 Atualizar", command=self.show_vehicles,
                                           bg=self.styles.colors['secondary'], fg=self.styles.colors['white'],
                                           font=self.styles.fonts['button'], relief='flat',
-                                          padx=12, pady=6, cursor='hand2')
-                    refresh_btn.pack(side=tk.RIGHT, padx=5)
+                                          padx=10, pady=8, cursor='hand2')
+                    refresh_btn.pack(side=tk.LEFT, padx=5)
+                    
+                    # Armazenar dados originais para filtros
+                    self.all_vehicles = vehicles
                     
                
                     self.create_vehicles_stats(vehicles)
@@ -842,6 +979,79 @@ class SmartCityOSGUI:
         except Exception as e:
             messagebox.showerror("Erro", f"Erro ao carregar veículos: {str(e)}")
             
+    def filter_vehicles(self):
+        """Filtra veículos baseado nos critérios selecionados"""
+        if not hasattr(self, 'all_vehicles'):
+            return
+            
+        filtered_vehicles = self.all_vehicles.copy()
+        
+        # Filtro por placa
+        plate_filter = self.vehicle_plate_var.get().upper().strip()
+        if plate_filter:
+            filtered_vehicles = [
+                v for v in filtered_vehicles 
+                if v['license_plate'] and plate_filter in v['license_plate'].upper()
+            ]
+        
+        # Filtro por modelo
+        model_filter = self.vehicle_model_var.get().lower().strip()
+        if model_filter:
+            filtered_vehicles = [
+                v for v in filtered_vehicles 
+                if v['model'] and model_filter in v['model'].lower()
+            ]
+        
+        # Filtro por ano
+        year_filter = self.vehicle_year_var.get().strip()
+        if year_filter:
+            filtered_vehicles = [
+                v for v in filtered_vehicles 
+                if v['year'] and year_filter in str(v['year'])
+            ]
+        
+        # Filtro por status
+        status_filter = self.vehicle_status_var.get()
+        if status_filter == "Ativos":
+            filtered_vehicles = [v for v in filtered_vehicles if v['allowed']]
+        elif status_filter == "Inativos":
+            filtered_vehicles = [v for v in filtered_vehicles if not v['allowed']]
+        
+        # Atualizar tabela com dados filtrados
+        self.update_vehicles_table(filtered_vehicles)
+        
+    def update_vehicles_table(self, vehicles):
+        """Atualiza apenas a tabela de veículos sem recarregar tudo"""
+        # Limpar tabela atual
+        for item in self.vehicles_tree.get_children():
+            self.vehicles_tree.delete(item)
+        
+        # Inserir dados filtrados
+        for vehicle in vehicles:
+            # Tenta pegar nome do cidadão primeiro, senão usa username
+            if vehicle['first_name'] and vehicle['last_name']:
+                owner_name = f"{vehicle['first_name']} {vehicle['last_name']}"
+            else:
+                owner_name = vehicle['username'] or 'N/A'
+            status = "✅ Ativo" if vehicle['allowed'] else "🔴 Inativo"
+            
+            self.vehicles_tree.insert('', tk.END, values=(
+                vehicle['id'],
+                vehicle['license_plate'],
+                vehicle['model'],
+                vehicle['year'],
+                owner_name,
+                status
+            ))
+        
+        # Atualizar contador
+        for widget in self.content_frame.winfo_children():
+            if isinstance(widget, tk.Frame) and widget.winfo_children():
+                for child in widget.winfo_children():
+                    if isinstance(child, tk.Label) and "veículos registrados" in child.cget("text"):
+                        child.config(text=f"🚗 {len(vehicles)} veículos registrados ({len(self.all_vehicles)} total)")
+                        break
+                        
     def create_vehicles_stats(self, vehicles):
         try:
             # Calcular estatísticas
@@ -879,7 +1089,7 @@ class SmartCityOSGUI:
         # Valor principal
         value_label = tk.Label(card, text=str(value), 
                                bg=self.styles.colors['card'], fg=color,
-                               font=self.styles.fonts['header'])
+                               font=self.styles.fonts['title'])
         value_label.pack()
         
         # Extra
@@ -897,7 +1107,7 @@ class SmartCityOSGUI:
         
         # Treeview para veículos
         columns = ('ID', 'Placa', 'Modelo', 'Ano', 'Proprietário', 'Status')
-        self.vehicles_tree = ttk.Treeview(table_frame, columns=columns, show='headings', height=15)
+        self.vehicles_tree = ttk.Treeview(table_frame, columns=columns, show='headings', style='Vehicles.Treeview')
         
         # Configurar colunas
         for col in columns:
@@ -924,7 +1134,11 @@ class SmartCityOSGUI:
         
         # Inserir dados
         for vehicle in vehicles:
-            owner_name = f"{vehicle['first_name']} {vehicle['last_name']}" if vehicle['first_name'] and vehicle['last_name'] else "N/A"
+            # Tenta pegar nome do cidadão primeiro, senão usa username
+            if vehicle['first_name'] and vehicle['last_name']:
+                owner_name = f"{vehicle['first_name']} {vehicle['last_name']}"
+            else:
+                owner_name = vehicle['username'] or 'N/A'
             status = "✅ Ativo" if vehicle['allowed'] else "🔴 Inativo"
             
             self.vehicles_tree.insert('', tk.END, values=(
@@ -976,28 +1190,124 @@ class SmartCityOSGUI:
                                           font=self.styles.fonts['title'])
                     title_label.pack(side=tk.LEFT, padx=20, pady=15)
                     
-                    # Botões de ação
-                    button_frame = tk.Frame(header_frame, bg=self.styles.colors['card'])
-                    button_frame.pack(side=tk.RIGHT, padx=20, pady=15)
+                    # Frame de filtros para sensores
+                    filter_frame = tk.Frame(header_frame, bg=self.styles.colors['card'])
+                    filter_frame.pack(side=tk.RIGHT, padx=20, pady=15)
                     
-                    add_btn = tk.Button(button_frame, text="➕ Adicionar Sensor", command=self.add_sensor_dialog,
+                    # Filtro por tipo
+                    tk.Label(filter_frame, text="🔍 Tipo:", bg=self.styles.colors['card'], 
+                            fg=self.styles.colors['text_secondary'], font=self.styles.fonts['small']).pack(side=tk.LEFT, padx=(0, 5))
+                    
+                    self.sensor_type_var = tk.StringVar()
+                    self.sensor_type_var.trace('w', lambda *args: self.filter_sensors())
+                    type_entry = tk.Entry(filter_frame, textvariable=self.sensor_type_var, 
+                                      font=self.styles.fonts['normal'], width=15)
+                    type_entry.pack(side=tk.LEFT, padx=5)
+                    
+                    # Filtro por localização
+                    tk.Label(filter_frame, text="📍 Local:", bg=self.styles.colors['card'], 
+                            fg=self.styles.colors['text_secondary'], font=self.styles.fonts['small']).pack(side=tk.LEFT, padx=(10, 5))
+                    
+                    self.sensor_location_var = tk.StringVar()
+                    self.sensor_location_var.trace('w', lambda *args: self.filter_sensors())
+                    location_entry = tk.Entry(filter_frame, textvariable=self.sensor_location_var, 
+                                         font=self.styles.fonts['normal'], width=15)
+                    location_entry.pack(side=tk.LEFT, padx=5)
+                    
+                    # Filtro por status
+                    tk.Label(filter_frame, text="Status:", bg=self.styles.colors['card'], 
+                            fg=self.styles.colors['text_secondary'], font=self.styles.fonts['small']).pack(side=tk.LEFT, padx=(10, 5))
+                    
+                    self.sensor_status_var = tk.StringVar(value="Todos")
+                    status_combo = ttk.Combobox(filter_frame, textvariable=self.sensor_status_var, 
+                                            values=["Todos", "Ativos", "Inativos"], width=10, state="readonly")
+                    status_combo.pack(side=tk.LEFT, padx=5)
+                    status_combo.bind('<<ComboboxSelected>>', lambda e: self.filter_sensors())
+                    
+                    # Filtro por leituras
+                    tk.Label(filter_frame, text="📊 Leituras:", bg=self.styles.colors['card'], 
+                            fg=self.styles.colors['text_secondary'], font=self.styles.fonts['small']).pack(side=tk.LEFT, padx=(10, 5))
+                    
+                    self.sensor_readings_var = tk.StringVar(value="Todos")
+                    readings_combo = ttk.Combobox(filter_frame, textvariable=self.sensor_readings_var, 
+                                             values=["Todos", "Com Leituras", "Sem Leituras"], width=12, state="readonly")
+                    readings_combo.pack(side=tk.LEFT, padx=5)
+                    readings_combo.bind('<<ComboboxSelected>>', lambda e: self.filter_sensors())
+                    
+                    # Botões de ação
+                    add_btn = tk.Button(filter_frame, text="➕ Adicionar", command=self.add_sensor_dialog,
                                       bg=self.styles.colors['success'], fg=self.styles.colors['white'],
                                       font=self.styles.fonts['button'], relief='flat',
-                                      padx=12, pady=6, cursor='hand2')
-                    add_btn.pack(side=tk.RIGHT, padx=5)
+                                      padx=10, pady=8, cursor='hand2')
+                    add_btn.pack(side=tk.LEFT, padx=5)
                     
-                    refresh_btn = tk.Button(button_frame, text="🔄 Atualizar", command=self.show_sensors,
+                    # Botão de atualizar
+                    refresh_btn = tk.Button(filter_frame, text="🔄 Atualizar", command=self.show_sensors,
                                           bg=self.styles.colors['secondary'], fg=self.styles.colors['white'],
                                           font=self.styles.fonts['button'], relief='flat',
-                                          padx=12, pady=6, cursor='hand2')
-                    refresh_btn.pack(side=tk.RIGHT, padx=5)
+                                          padx=10, pady=8, cursor='hand2')
+                    refresh_btn.pack(side=tk.LEFT, padx=5)
                     
+                    # Armazenar dados originais para filtros
+                    self.all_sensors = sensors
+                    
+                    self.create_sensors_stats(sensors)
                     # Tabela de sensores
                     self.create_sensors_table(sensors)
                     
         except Exception as e:
             messagebox.showerror("Erro", f"Erro ao carregar sensores: {str(e)}")
             
+    def create_sensors_stats(self, sensors):
+        """Cria cards de estatísticas para sensores"""
+        try:
+            # Calcular estatísticas
+            total_sensors = len(sensors)
+            active_sensors = len([s for s in sensors if s['active']]) if sensors else 0
+            inactive_sensors = len([s for s in sensors if not s['active']]) if sensors else 0
+            total_readings = sum(s['reading_count'] for s in sensors if s['reading_count']) if sensors else 0
+            
+            # Frame de estatísticas
+            stats_frame = tk.Frame(self.content_frame, bg=self.styles.colors['background'])
+            stats_frame.pack(fill=tk.X, padx=20, pady=(10, 20))
+            
+            # Cards
+            cards_data = [
+                ("📹 Total Sensores", total_sensors, f"{total_readings} leituras", self.styles.colors['primary']),
+                ("✅ Ativos", active_sensors, f"{(active_sensors/total_sensors*100):.1f}%" if total_sensors > 0 else "0%", self.styles.colors['success']),
+                ("🔴 Inativos", inactive_sensors, f"{(inactive_sensors/total_sensors*100):.1f}%" if total_sensors > 0 else "0%", self.styles.colors['warning'])
+            ]
+            
+            for i, (title, value, extra, color) in enumerate(cards_data):
+                card = self.create_sensors_stat_card(stats_frame, title, value, extra, color)
+                card.pack(side=tk.LEFT, padx=10, fill=tk.BOTH, expand=True)
+        except Exception as e:
+            print(f"Erro ao criar estatísticas de sensores: {e}")
+            # Não mostrar erro ao usuário, apenas não criar os stats
+            
+    def create_sensors_stat_card(self, parent, title, value, extra, color):
+        card = tk.Frame(parent, bg=self.styles.colors['card'], relief='solid', bd=1)
+        
+        # Título
+        title_label = tk.Label(card, text=title, 
+                              bg=self.styles.colors['card'], fg=self.styles.colors['text_secondary'],
+                              font=self.styles.fonts['small'])
+        title_label.pack(pady=(10, 5))
+        
+        # Valor principal
+        value_label = tk.Label(card, text=str(value), 
+                               bg=self.styles.colors['card'], fg=color,
+                               font=self.styles.fonts['title'])
+        value_label.pack()
+        
+        # Extra
+        extra_label = tk.Label(card, text=extra, 
+                              bg=self.styles.colors['card'], fg=self.styles.colors['text_secondary'],
+                              font=self.styles.fonts['small'])
+        extra_label.pack(pady=(0, 10))
+        
+        return card
+        
     def create_sensors_table(self, sensors):
         # Frame da tabela
         table_frame = tk.Frame(self.content_frame, bg=self.styles.colors['card'])
@@ -1005,7 +1315,7 @@ class SmartCityOSGUI:
         
         # Treeview para sensores
         columns = ('ID', 'Tipo', 'Localização', 'Status', 'Leituras', 'Última Leitura')
-        self.sensors_tree = ttk.Treeview(table_frame, columns=columns, show='headings', style='Results.Treeview')
+        self.sensors_tree = ttk.Treeview(table_frame, columns=columns, show='headings', style='Sensors.Treeview')
         
         # Configurar colunas
         for col in columns:
@@ -1056,6 +1366,80 @@ class SmartCityOSGUI:
                             font=self.styles.fonts['small'])
         info_label.pack(side=tk.LEFT)
        
+    def filter_sensors(self):
+        """Filtra sensores baseado nos critérios selecionados"""
+        if not hasattr(self, 'all_sensors'):
+            return
+            
+        filtered_sensors = self.all_sensors.copy()
+        
+        # Filtro por tipo
+        type_filter = self.sensor_type_var.get().lower().strip()
+        if type_filter:
+            filtered_sensors = [
+                s for s in filtered_sensors 
+                if s['type'] and type_filter in s['type'].lower()
+            ]
+        
+        # Filtro por localização
+        location_filter = self.sensor_location_var.get().lower().strip()
+        if location_filter:
+            filtered_sensors = [
+                s for s in filtered_sensors 
+                if s['location'] and location_filter in s['location'].lower()
+            ]
+        
+        # Filtro por status
+        status_filter = self.sensor_status_var.get()
+        if status_filter == "Ativos":
+            filtered_sensors = [s for s in filtered_sensors if s['active']]
+        elif status_filter == "Inativos":
+            filtered_sensors = [s for s in filtered_sensors if not s['active']]
+        
+        # Filtro por leituras
+        readings_filter = self.sensor_readings_var.get()
+        if readings_filter == "Com Leituras":
+            filtered_sensors = [s for s in filtered_sensors if s['reading_count'] and s['reading_count'] > 0]
+        elif readings_filter == "Sem Leituras":
+            filtered_sensors = [s for s in filtered_sensors if not s['reading_count'] or s['reading_count'] == 0]
+        
+        # Atualizar tabela com dados filtrados
+        self.update_sensors_table(filtered_sensors)
+        
+    def update_sensors_table(self, sensors):
+        """Atualiza apenas a tabela de sensores sem recarregar tudo"""
+        # Limpar tabela atual
+        for item in self.sensors_tree.get_children():
+            self.sensors_tree.delete(item)
+        
+        # Inserir dados filtrados
+        for sensor in sensors:
+            status = "✅ Ativo" if sensor['active'] else "🔴 Inativo"
+            tag = 'active' if sensor['active'] else 'inactive'
+            
+            # Formatar data da última leitura
+            if sensor['last_reading'] and hasattr(sensor['last_reading'], 'strftime'):
+                last_reading = sensor['last_reading'].strftime('%d/%m/%Y %H:%M')
+            else:
+                last_reading = 'N/A'
+            
+            self.sensors_tree.insert('', tk.END, values=(
+                sensor['id'],
+                sensor['type'],
+                sensor['location'],
+                status,
+                sensor['reading_count'],
+                last_reading
+            ), tags=(tag,))
+        
+        # Atualizar contador
+        for widget in self.content_frame.winfo_children():
+            if isinstance(widget, tk.Frame) and widget.winfo_children():
+                for child in widget.winfo_children():
+                    if isinstance(child, tk.Label) and "sensores cadastrados" in child.cget("text"):
+                        child.config(text=f"📹 {len(sensors)} sensores cadastrados ({len(self.all_sensors)} total)")
+                        break
+                        
     def show_incidents(self):
         self.clear_content()
         
@@ -1084,23 +1468,68 @@ class SmartCityOSGUI:
                     title_label = tk.Label(header_frame, text="⚠️ Gestão de Incidentes", 
                                           bg=self.styles.colors['card'], fg=self.styles.colors['text_primary'],
                                           font=self.styles.fonts['title'])
-                    title_label.pack(side=tk.LEFT, padx=20, pady=15)
+                    title_label.pack(side=tk.LEFT, padx=1, pady=15)
+                    
+                    # Frame de filtros para incidentes
+                    filter_frame = tk.Frame(header_frame, bg=self.styles.colors['card'])
+                    filter_frame.pack(side=tk.RIGHT, padx=1, pady=15)
+                    
+                    # Filtro por localização
+                    tk.Label(filter_frame, text="🔍 Local:", bg=self.styles.colors['card'], 
+                            fg=self.styles.colors['text_secondary'], font=self.styles.fonts['small']).pack(side=tk.LEFT, padx=(0, 5))
+                    
+                    self.incident_location_var = tk.StringVar()
+                    self.incident_location_var.trace('w', lambda *args: self.filter_incidents())
+                    location_entry = tk.Entry(filter_frame, textvariable=self.incident_location_var, 
+                                         font=self.styles.fonts['normal'], width=20)
+                    location_entry.pack(side=tk.LEFT, padx=5)
+                    
+                    # Filtro por período
+                    tk.Label(filter_frame, text="📅 Período:", bg=self.styles.colors['card'], 
+                            fg=self.styles.colors['text_secondary'], font=self.styles.fonts['small']).pack(side=tk.LEFT, padx=(10, 5))
+                    
+                    self.incident_period_var = tk.StringVar(value="Todos")
+                    period_combo = ttk.Combobox(filter_frame, textvariable=self.incident_period_var, 
+                                            values=["Todos", "Hoje", "Esta Semana", "Este Mês"], width=12, state="readonly")
+                    period_combo.pack(side=tk.LEFT, padx=5)
+                    period_combo.bind('<<ComboboxSelected>>', lambda e: self.filter_incidents())
+                    
+                    # Filtro por multas
+                    tk.Label(filter_frame, text="💰 Multas:", bg=self.styles.colors['card'], 
+                            fg=self.styles.colors['text_secondary'], font=self.styles.fonts['small']).pack(side=tk.LEFT, padx=(10, 5))
+                    
+                    self.incident_fines_var = tk.StringVar(value="Todos")
+                    fines_combo = ttk.Combobox(filter_frame, textvariable=self.incident_fines_var, 
+                                           values=["Todos", "Com Multas", "Sem Multas"], width=12, state="readonly")
+                    fines_combo.pack(side=tk.LEFT, padx=5)
+                    fines_combo.bind('<<ComboboxSelected>>', lambda e: self.filter_incidents())
+                    
+                    # Filtro por descrição
+                    tk.Label(filter_frame, text="📝 Descrição:", bg=self.styles.colors['card'], 
+                            fg=self.styles.colors['text_secondary'], font=self.styles.fonts['small']).pack(side=tk.LEFT, padx=(10, 5))
+                    
+                    self.incident_description_var = tk.StringVar()
+                    self.incident_description_var.trace('w', lambda *args: self.filter_incidents())
+                    description_entry = tk.Entry(filter_frame, textvariable=self.incident_description_var, 
+                                           font=self.styles.fonts['normal'], width=20)
+                    description_entry.pack(side=tk.LEFT, padx=5)
                     
                     # Botões de ação
-                    button_frame = tk.Frame(header_frame, bg=self.styles.colors['card'])
-                    button_frame.pack(side=tk.RIGHT, padx=20, pady=15)
-                    
-                    add_btn = tk.Button(button_frame, text="➕ Registrar Incidente", command=self.add_incident_dialog,
+                    add_btn = tk.Button(filter_frame, text="➕ Registrar", command=self.add_incident_dialog,
                                       bg=self.styles.colors['warning'], fg=self.styles.colors['white'],
                                       font=self.styles.fonts['button'], relief='flat',
-                                      padx=12, pady=6, cursor='hand2')
-                    add_btn.pack(side=tk.RIGHT, padx=5)
+                                      padx=10, pady=8, cursor='hand2')
+                    add_btn.pack(side=tk.LEFT, padx=5)
                     
-                    refresh_btn = tk.Button(button_frame, text="🔄 Atualizar", command=self.show_incidents,
+                    # Botão de atualizar
+                    refresh_btn = tk.Button(filter_frame, text="🔄 Atualizar", command=self.show_incidents,
                                           bg=self.styles.colors['secondary'], fg=self.styles.colors['white'],
                                           font=self.styles.fonts['button'], relief='flat',
-                                          padx=12, pady=6, cursor='hand2')
-                    refresh_btn.pack(side=tk.RIGHT, padx=5)
+                                          padx=10, pady=8, cursor='hand2')
+                    refresh_btn.pack(side=tk.LEFT, padx=10)
+                    
+                    # Armazenar dados originais para filtros
+                    self.all_incidents = incidents
                     
                     # Tabela de incidentes
                     self.create_incidents_table(incidents)
@@ -1114,8 +1543,8 @@ class SmartCityOSGUI:
         table_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
         
         # Treeview para incidentes
-        columns = ('ID', 'Localização', 'Data/Hora', 'Descrição', 'Multas', 'Valor Total')
-        self.incidents_tree = ttk.Treeview(table_frame, columns=columns, show='headings', style='Results.Treeview')
+        columns = ('ID', 'Local', 'Data/Hora', 'Descrição', 'Multas', 'Valor Total')
+        self.incidents_tree = ttk.Treeview(table_frame, columns=columns, show='headings', style='Incidents.Treeview')
         
         # Configurar colunas
         for col in columns:
@@ -1172,6 +1601,99 @@ class SmartCityOSGUI:
                             font=self.styles.fonts['small'])
         info_label.pack(side=tk.LEFT)
         
+    def filter_incidents(self):
+        """Filtra incidentes baseado nos critérios selecionados"""
+        if not hasattr(self, 'all_incidents'):
+            return
+            
+        filtered_incidents = self.all_incidents.copy()
+        
+        # Filtro por localização
+        location_filter = self.incident_location_var.get().lower().strip()
+        if location_filter:
+            filtered_incidents = [
+                i for i in filtered_incidents 
+                if i['location'] and location_filter in i['location'].lower()
+            ]
+        
+        # Filtro por período
+        period_filter = self.incident_period_var.get()
+        if period_filter != "Todos":
+            from datetime import datetime, timedelta
+            now = datetime.now()
+            
+            if period_filter == "Hoje":
+                start_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
+                filtered_incidents = [
+                    i for i in filtered_incidents 
+                    if i['occurred_at'] and i['occurred_at'].date() >= start_date.date()
+                ]
+            elif period_filter == "Esta Semana":
+                start_date = now - timedelta(days=7)
+                filtered_incidents = [
+                    i for i in filtered_incidents 
+                    if i['occurred_at'] and i['occurred_at'] >= start_date
+                ]
+            elif period_filter == "Este Mês":
+                start_date = now - timedelta(days=30)
+                filtered_incidents = [
+                    i for i in filtered_incidents 
+                    if i['occurred_at'] and i['occurred_at'] >= start_date
+                ]
+        
+        # Filtro por multas
+        fines_filter = self.incident_fines_var.get()
+        if fines_filter == "Com Multas":
+            filtered_incidents = [i for i in filtered_incidents if i['fine_count'] and i['fine_count'] > 0]
+        elif fines_filter == "Sem Multas":
+            filtered_incidents = [i for i in filtered_incidents if not i['fine_count'] or i['fine_count'] == 0]
+        
+        # Filtro por descrição
+        description_filter = self.incident_description_var.get().lower().strip()
+        if description_filter:
+            filtered_incidents = [
+                i for i in filtered_incidents 
+                if i['description'] and description_filter in i['description'].lower()
+            ]
+        
+        # Atualizar tabela com dados filtrados
+        self.update_incidents_table(filtered_incidents)
+        
+    def update_incidents_table(self, incidents):
+        """Atualiza apenas a tabela de incidentes sem recarregar tudo"""
+        # Limpar tabela atual
+        for item in self.incidents_tree.get_children():
+            self.incidents_tree.delete(item)
+        
+        # Inserir dados filtrados
+        for i, incident in enumerate(incidents):
+            try:
+                occurred_at = incident['occurred_at'].strftime('%d/%m %H:%M') if incident['occurred_at'] else "N/A"
+                description = incident['description'] or "Sem descrição"
+                if len(description) > 50:
+                    description = description[:47] + "..."
+                
+                tag = 'Results.Treeview.Even' if i % 2 == 0 else 'Results.Treeview.Odd'
+                self.incidents_tree.insert('', tk.END, values=(
+                    incident['id'],
+                    incident['location'] or "N/A",
+                    occurred_at,
+                    description,
+                    incident['fine_count'] or 0,
+                    f"R$ {incident['total_fines']:.2f}" if incident['total_fines'] and incident['total_fines'] > 0 else "R$ 0,00"
+                ), tags=(tag,))
+            except Exception as e:
+                print(f"Erro ao processar incidente {i}: {e}")
+                continue
+        
+        # Atualizar contador
+        for widget in self.content_frame.winfo_children():
+            if isinstance(widget, tk.Frame) and widget.winfo_children():
+                for child in widget.winfo_children():
+                    if isinstance(child, tk.Label) and "incidentes registrados" in child.cget("text"):
+                        child.config(text=f"⚠️ {len(incidents)} incidentes registrados ({len(self.all_incidents)} total)")
+                        break
+        
     def show_fines(self):
         self.clear_content()
         
@@ -1207,17 +1729,68 @@ class SmartCityOSGUI:
                     button_frame = tk.Frame(header_frame, bg=self.styles.colors['card'])
                     button_frame.pack(side=tk.RIGHT, padx=20, pady=15)
                     
-                    pay_btn = tk.Button(button_frame, text="💳 Pagar Multa", command=self.pay_fine_dialog,
+                    # Filtro por status
+                    tk.Label(button_frame, text="Status:", bg=self.styles.colors['card'], 
+                            fg=self.styles.colors['text_secondary'], font=self.styles.fonts['small']).pack(side=tk.LEFT, padx=(0, 5))
+                    
+                    self.fine_status_var = tk.StringVar(value="Todos")
+                    status_combo = ttk.Combobox(button_frame, textvariable=self.fine_status_var, 
+                                           values=["Todos", "Pendentes", "Pagas", "Vencidas"], width=10, state="readonly")
+                    status_combo.pack(side=tk.LEFT, padx=5)
+                    status_combo.bind('<<ComboboxSelected>>', lambda e: self.filter_fines())
+                    
+                    # Filtro por valor
+                    tk.Label(button_frame, text="💰 Valor Mínimo:", bg=self.styles.colors['card'], 
+                            fg=self.styles.colors['text_secondary'], font=self.styles.fonts['small']).pack(side=tk.LEFT, padx=(10, 5))
+                    
+                    self.fine_amount_var = tk.StringVar()
+                    self.fine_amount_var.trace('w', lambda *args: self.filter_fines())
+                    amount_entry = tk.Entry(button_frame, textvariable=self.fine_amount_var, 
+                                        font=self.styles.fonts['normal'], width=12)
+                    amount_entry.pack(side=tk.LEFT, padx=5)
+                    
+                    # Filtro por placa
+                    tk.Label(button_frame, text="🚗 Placa:", bg=self.styles.colors['card'], 
+                            fg=self.styles.colors['text_secondary'], font=self.styles.fonts['small']).pack(side=tk.LEFT, padx=(10, 5))
+                    
+                    self.fine_plate_var = tk.StringVar()
+                    self.fine_plate_var.trace('w', lambda *args: self.filter_fines())
+                    plate_entry = tk.Entry(button_frame, textvariable=self.fine_plate_var, 
+                                      font=self.styles.fonts['normal'], width=12)
+                    plate_entry.pack(side=tk.LEFT, padx=5)
+                    
+                    # Filtro por período
+                    tk.Label(button_frame, text="📅 Período:", bg=self.styles.colors['card'], 
+                            fg=self.styles.colors['text_secondary'], font=self.styles.fonts['small']).pack(side=tk.LEFT, padx=(10, 5))
+                    
+                    self.fine_period_var = tk.StringVar(value="Todos")
+                    period_combo = ttk.Combobox(button_frame, textvariable=self.fine_period_var, 
+                                           values=["Todos", "Hoje", "Esta Semana", "Este Mês", "Vencidas"], width=12, state="readonly")
+                    period_combo.pack(side=tk.LEFT, padx=5)
+                    period_combo.bind('<<ComboboxSelected>>', lambda e: self.filter_fines())
+                    
+                    # Botões de ação
+                    pay_btn = tk.Button(button_frame, text="💳 Pagar", command=self.pay_fine_dialog,
                                       bg=self.styles.colors['success'], fg=self.styles.colors['white'],
                                       font=self.styles.fonts['button'], relief='flat',
-                                      padx=12, pady=6, cursor='hand2')
-                    pay_btn.pack(side=tk.RIGHT, padx=5)
+                                      padx=10, pady=8, cursor='hand2')
+                    pay_btn.pack(side=tk.LEFT, padx=5)
                     
+                    add_btn = tk.Button(button_frame, text="➕ Gerar", command=self.generate_fine_dialog,
+                                      bg=self.styles.colors['warning'], fg=self.styles.colors['white'],
+                                      font=self.styles.fonts['button'], relief='flat',
+                                      padx=10, pady=8, cursor='hand2')
+                    add_btn.pack(side=tk.LEFT, padx=5)
+                    
+                    # Botão de atualizar
                     refresh_btn = tk.Button(button_frame, text="🔄 Atualizar", command=self.show_fines,
                                           bg=self.styles.colors['secondary'], fg=self.styles.colors['white'],
                                           font=self.styles.fonts['button'], relief='flat',
-                                          padx=12, pady=6, cursor='hand2')
-                    refresh_btn.pack(side=tk.RIGHT, padx=5)
+                                          padx=10, pady=8, cursor='hand2')
+                    refresh_btn.pack(side=tk.LEFT, padx=5)
+                    
+                    # Armazenar dados originais para filtros
+                    self.all_fines = fines
                     
                     # Cards de estatísticas
                     self.create_fines_stats(fines)
@@ -1284,7 +1857,7 @@ class SmartCityOSGUI:
         
         # Treeview para multas
         columns = ('ID', 'Valor', 'Status', 'Data', 'Vencimento', 'Local', 'Descrição', 'Placa')
-        self.fines_tree = ttk.Treeview(table_frame, columns=columns, show='headings', style='Results.Treeview')
+        self.fines_tree = ttk.Treeview(table_frame, columns=columns, show='headings', style='Fines.Treeview')
         
         # Configurar colunas
         col_widths = {
@@ -1312,25 +1885,33 @@ class SmartCityOSGUI:
         # Inserir dados
         for i, fine in enumerate(fines):
             try:
-                status_icon = "🔴" if fine['status'] == 'pending' else "✅"
-                status_text = f"{status_icon} {'Pendente' if fine['status'] == 'pending' else 'Paga'}"
+                status_map = {
+                    'pending': '🔴 Pendente',
+                    'paid': '✅ Paga',
+                    'overdue': '⚠️ Vencida'
+                }
+                status = status_map.get(fine['status'], fine['status'])
+                
+                # Formatar valores
+                amount = f"R$ {fine['amount']:,.2f}" if fine['amount'] and fine['amount'] > 0 else "R$ 0,00"
                 created_at = fine['created_at'].strftime('%d/%m/%Y') if fine['created_at'] else "N/A"
                 due_date = fine['due_date'].strftime('%d/%m/%Y') if fine['due_date'] else "N/A"
-                incident_location = fine['incident_location'] or "N/A"
-                incident_description = fine['incident_description'] or "Sem descrição"
-                if len(incident_description) > 30:
+                incident_location = fine.get('incident_location', 'N/A')
+                incident_description = fine.get('incident_description', 'N/A')
+                if incident_description and len(incident_description) > 30:
                     incident_description = incident_description[:27] + "..."
+                license_plate = fine.get('license_plate', 'N/A')
                 
                 tag = 'Results.Treeview.Even' if i % 2 == 0 else 'Results.Treeview.Odd'
                 self.fines_tree.insert('', tk.END, values=(
                     fine['id'],
-                    f"R$ {fine['amount']:.2f}" if fine['amount'] and fine['amount'] > 0 else "R$ 0,00",
-                    status_text,
+                    amount,
+                    status,
                     created_at,
                     due_date,
                     incident_location,
                     incident_description,
-                    fine['license_plate'] or "N/A"
+                    license_plate
                 ), tags=(tag,))
             except Exception as e:
                 print(f"Erro ao processar multa {i}: {e}")
@@ -1344,6 +1925,115 @@ class SmartCityOSGUI:
                             bg=self.styles.colors['background'], fg=self.styles.colors['text_secondary'],
                             font=self.styles.fonts['small'])
         info_label.pack(side=tk.LEFT)
+        
+    def filter_fines(self):
+        """Filtra multas baseado nos critérios selecionados"""
+        if not hasattr(self, 'all_fines'):
+            return
+            
+        filtered_fines = self.all_fines.copy()
+        
+        # Filtro por status
+        status_filter = self.fine_status_var.get()
+        if status_filter == "Pendentes":
+            filtered_fines = [f for f in filtered_fines if f['status'] == 'pending']
+        elif status_filter == "Pagas":
+            filtered_fines = [f for f in filtered_fines if f['status'] == 'paid']
+        elif status_filter == "Vencidas":
+            from datetime import datetime
+            now = datetime.now()
+            filtered_fines = [
+                f for f in filtered_fines 
+                if f['due_date'] and f['due_date'] < now and f['status'] != 'paid'
+            ]
+        
+        # Filtro por valor mínimo
+        amount_filter = self.fine_amount_var.get().strip()
+        if amount_filter:
+            try:
+                min_amount = float(amount_filter)
+                filtered_fines = [f for f in filtered_fines if f['amount'] and f['amount'] >= min_amount]
+            except ValueError:
+                pass
+        
+        # Filtro por placa
+        plate_filter = self.fine_plate_var.get().upper().strip()
+        if plate_filter:
+            filtered_fines = [
+                f for f in filtered_fines 
+                if f['license_plate'] and plate_filter in f['license_plate'].upper()
+            ]
+        
+        # Filtro por período
+        period_filter = self.fine_period_var.get()
+        if period_filter != "Todos":
+            from datetime import datetime, timedelta
+            now = datetime.now()
+            
+            if period_filter == "Hoje":
+                start_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
+                filtered_fines = [
+                    f for f in filtered_fines 
+                    if f['created_at'] and f['created_at'].date() >= start_date.date()
+                ]
+            elif period_filter == "Esta Semana":
+                start_date = now - timedelta(days=7)
+                filtered_fines = [
+                    f for f in filtered_fines 
+                    if f['created_at'] and f['created_at'] >= start_date
+                ]
+            elif period_filter == "Este Mês":
+                start_date = now - timedelta(days=30)
+                filtered_fines = [
+                    f for f in filtered_fines 
+                    if f['created_at'] and f['created_at'] >= start_date
+                ]
+            elif period_filter == "Vencidas":
+                filtered_fines = [
+                    f for f in filtered_fines 
+                    if f['due_date'] and f['due_date'] < now and f['status'] != 'paid'
+                ]
+        
+        # Atualizar tabela com dados filtrados
+        self.update_fines_table(filtered_fines)
+        
+    def update_fines_table(self, fines):
+        """Atualiza apenas a tabela de multas sem recarregar tudo"""
+        # Limpar tabela atual
+        for item in self.fines_tree.get_children():
+            self.fines_tree.delete(item)
+        
+        # Inserir dados filtrados
+        for fine in fines:
+            status_map = {
+                'pending': '🔴 Pendente',
+                'paid': '✅ Paga',
+                'overdue': '⚠️ Vencida'
+            }
+            status = status_map.get(fine['status'], fine['status'])
+            
+            # Formatar valores
+            amount = f"R$ {fine['amount']:,.2f}" if fine['amount'] else "R$ 0,00"
+            due_date = fine['due_date'].strftime('%d/%m/%Y') if fine['due_date'] else "N/A"
+            
+            self.fines_tree.insert('', tk.END, values=(
+                fine['id'],
+                amount,
+                status,
+                fine['created_at'].strftime('%d/%m/%Y') if fine['created_at'] else "N/A",
+                due_date,
+                fine.get('incident_location', 'N/A'),
+                fine.get('incident_description', 'N/A')[:30] + '...' if fine.get('incident_description') else 'N/A',
+                fine.get('license_plate', 'N/A')
+            ))
+        
+        # Atualizar contador
+        for widget in self.content_frame.winfo_children():
+            if isinstance(widget, tk.Frame) and widget.winfo_children():
+                for child in widget.winfo_children():
+                    if isinstance(child, tk.Label) and "multas registradas" in child.cget("text"):
+                        child.config(text=f"💰 {len(fines)} multas registradas ({len(self.all_fines)} total)")
+                        break
         
     def show_statistics(self):
         self.clear_content()
@@ -1371,14 +2061,14 @@ class SmartCityOSGUI:
                     export_btn = tk.Button(button_frame, text="📥 Exportar Relatório", command=self.export_statistics,
                                          bg=self.styles.colors['secondary'], fg=self.styles.colors['white'],
                                          font=self.styles.fonts['button'], relief='flat',
-                                         padx=12, pady=6, cursor='hand2')
+                                         padx=10, pady=8, cursor='hand2')
                     export_btn.pack(side=tk.RIGHT, padx=5)
                     
                     refresh_btn = tk.Button(button_frame, text="🔄 Atualizar", command=self.show_statistics,
                                           bg=self.styles.colors['primary'], fg=self.styles.colors['white'],
                                           font=self.styles.fonts['button'], relief='flat',
-                                          padx=12, pady=6, cursor='hand2')
-                    refresh_btn.pack(side=tk.RIGHT, padx=5)
+                                          padx=10, pady=8, cursor='hand2')
+                    refresh_btn.pack(side=tk.RIGHT, padx=20, pady=15)
                     
                     # Carregar estatísticas
                     stats = self.load_comprehensive_statistics(cur)
@@ -1397,15 +2087,13 @@ class SmartCityOSGUI:
             cur.execute("""
                 SELECT COUNT(*) as total,
                        COUNT(CASE WHEN created_at >= CURRENT_DATE - INTERVAL '30 days' THEN 1 END) as this_month,
-                       COUNT(CASE WHEN created_at >= CURRENT_DATE - INTERVAL '7 days' THEN 1 END) as this_week,
-                       COUNT(CASE WHEN phone IS NOT NULL AND phone != '' THEN 1 END) as with_phone,
-                       COUNT(CASE WHEN email IS NOT NULL AND email != '' THEN 1 END) as with_email
+                       COUNT(CASE WHEN created_at >= CURRENT_DATE - INTERVAL '7 days' THEN 1 END) as this_week
                 FROM app_user
             """)
             stats['users'] = cur.fetchone()
         except Exception as e:
             print(f"Erro ao carregar estatísticas de usuários: {e}")
-            stats['users'] = {'total': 0, 'this_month': 0, 'this_week': 0, 'with_phone': 0, 'with_email': 0}
+            stats['users'] = {'total': 0, 'this_month': 0, 'this_week': 0}
         
         try:
             # Estatísticas de Cidadãos
@@ -1591,25 +2279,26 @@ class SmartCityOSGUI:
         # Cards secundários com tratamento de divisão por zero
         secondary_cards = []
         
-        # Usuários com Telefone
+        # Usuários Totais
         users_total = stats['users']['total']
-        users_with_phone = stats['users']['with_phone']
-        phone_percent = (users_with_phone / users_total * 100) if users_total > 0 else 0
+        users_this_month = stats['users']['this_month']
+        month_percent = (users_this_month / users_total * 100) if users_total > 0 else 0
         secondary_cards.append((
-            "📱 Usuários c/ Telefone", 
-            users_with_phone,
-            f"{phone_percent:.1f}%", 
+            "👤 Usuários Totais", 
+            users_total,
+            f"{month_percent:.1f}% novos este mês", 
             self.styles.colors['primary']
         ))
         
-        # Usuários com Email
-        users_with_email = stats['users']['with_email']
-        email_percent = (users_with_email / users_total * 100) if users_total > 0 else 0
+        # Cidadãos com Dívida
+        citizens_with_debt = stats['citizens']['with_debt']
+        citizens_total = stats['citizens']['total']
+        debt_percent = (citizens_with_debt / citizens_total * 100) if citizens_total > 0 else 0
         secondary_cards.append((
-            "📧 Usuários c/ Email", 
-            users_with_email,
-            f"{email_percent:.1f}%", 
-            self.styles.colors['success']
+            "💳 Cidadãos c/ Dívida", 
+            citizens_with_debt,
+            f"{debt_percent:.1f}% do total", 
+            self.styles.colors['warning']
         ))
         
         # Sensores
@@ -2111,7 +2800,10 @@ class SmartCityOSGUI:
         
     def pay_fine_dialog(self):
         messagebox.showinfo("Em desenvolvimento", "Funcionalidade de pagar multa em desenvolvimento!")
-
+        
+    def generate_fine_dialog(self):
+        messagebox.showinfo("Em desenvolvimento", "Funcionalidade de gerar multa em desenvolvimento!")
+        
 def main():
     root = tk.Tk()
     app = SmartCityOSGUI(root)

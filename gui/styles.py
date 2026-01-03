@@ -27,13 +27,13 @@ class SmartCityStyles:
         }
         
         self.fonts = {
-            'title': ('Segoe UI', 24, 'bold'),
-            'subtitle': ('Segoe UI', 16, 'bold'),
-            'heading': ('Segoe UI', 14, 'bold'),
-            'normal': ('Segoe UI', 10),
-            'small': ('Segoe UI', 9),
-            'button': ('Segoe UI', 10, 'bold'),
-            'card_title': ('Segoe UI', 12, 'bold')
+            'title': ('Segoe UI', 15, 'bold'),
+            'subtitle': ('Segoe UI', 14, 'bold'),
+            'heading': ('Segoe UI', 12, 'bold'),
+            'normal': ('Segoe UI', 9),
+            'small': ('Segoe UI', 8),
+            'button': ('Segoe UI', 9, 'bold'),
+            'card_title': ('Segoe UI', 11, 'bold')
         }
         
     def configure_styles(self, root):
@@ -57,7 +57,7 @@ class SmartCityStyles:
             borderwidth=0,
             focuscolor='none',
             font=self.fonts['button'],
-            padding=(20, 10)
+            padding=(20, 10),
         )
         style.map(
             'Primary.TButton',
@@ -72,7 +72,7 @@ class SmartCityStyles:
             borderwidth=0,
             focuscolor='none',
             font=self.fonts['button'],
-            padding=(15, 8)
+            padding=(12, 6)
         )
         style.map(
             'Success.TButton',
@@ -87,7 +87,7 @@ class SmartCityStyles:
             borderwidth=0,
             focuscolor='none',
             font=self.fonts['button'],
-            padding=(15, 8)
+            padding=(12, 6)
         )
         style.map(
             'Danger.TButton',
@@ -102,7 +102,7 @@ class SmartCityStyles:
             borderwidth=1,
             focuscolor='none',
             font=self.fonts['button'],
-            padding=(15, 8)
+            padding=(12, 6)
         )
         style.map(
             'Secondary.TButton',
@@ -213,6 +213,139 @@ class SmartCityStyles:
             foreground=self.colors['text_primary']
         )
         
+        # Estilos específicos para cada aba
+        # Usuários - Verde marinho
+        style.configure(
+            'Users.Treeview',
+            background=self.colors['white'],
+            foreground=self.colors['text_primary'],
+            fieldbackground=self.colors['white'],
+            borderwidth=0,
+            font=self.fonts['normal']
+        )
+        style.configure(
+            'Users.Treeview.Heading',
+            background=self.colors['primary'],
+            foreground=self.colors['white'],
+            font=self.fonts['heading'],
+            relief='flat'
+        )
+        style.map(
+            'Users.Treeview',
+            background=[('selected', self.colors['secondary'])],
+            foreground=[('selected', self.colors['white'])]
+        )
+        
+        # Cidadãos - Azul aço
+        style.configure(
+            'Citizens.Treeview',
+            background=self.colors['white'],
+            foreground=self.colors['text_primary'],
+            fieldbackground=self.colors['white'],
+            borderwidth=0,
+            font=self.fonts['normal']
+        )
+        style.configure(
+            'Citizens.Treeview.Heading',
+            background=self.colors['secondary'],
+            foreground=self.colors['white'],
+            font=self.fonts['heading'],
+            relief='flat'
+        )
+        style.map(
+            'Citizens.Treeview',
+            background=[('selected', self.colors['primary'])],
+            foreground=[('selected', self.colors['white'])]
+        )
+        
+        # Veículos - Laranja escuro
+        style.configure(
+            'Vehicles.Treeview',
+            background=self.colors['white'],
+            foreground=self.colors['text_primary'],
+            fieldbackground=self.colors['white'],
+            borderwidth=0,
+            font=self.fonts['normal']
+        )
+        style.configure(
+            'Vehicles.Treeview.Heading',
+            background=self.colors['warning'],
+            foreground=self.colors['white'],
+            font=self.fonts['heading'],
+            relief='flat'
+        )
+        style.map(
+            'Vehicles.Treeview',
+            background=[('selected', self.colors['secondary'])],
+            foreground=[('selected', self.colors['white'])]
+        )
+        
+        # Sensores - Verde floresta
+        style.configure(
+            'Sensors.Treeview',
+            background=self.colors['white'],
+            foreground=self.colors['text_primary'],
+            fieldbackground=self.colors['white'],
+            borderwidth=0,
+            font=self.fonts['normal']
+        )
+        style.configure(
+            'Sensors.Treeview.Heading',
+            background=self.colors['success'],
+            foreground=self.colors['white'],
+            font=self.fonts['heading'],
+            relief='flat'
+        )
+        style.map(
+            'Sensors.Treeview',
+            background=[('selected', self.colors['secondary'])],
+            foreground=[('selected', self.colors['white'])]
+        )
+        
+        # Incidentes - Vermelho carmesim
+        style.configure(
+            'Incidents.Treeview',
+            background=self.colors['white'],
+            foreground=self.colors['text_primary'],
+            fieldbackground=self.colors['white'],
+            borderwidth=0,
+            font=self.fonts['normal']
+        )
+        style.configure(
+            'Incidents.Treeview.Heading',
+            background=self.colors['accent'],
+            foreground=self.colors['white'],
+            font=self.fonts['heading'],
+            relief='flat'
+        )
+        style.map(
+            'Incidents.Treeview',
+            background=[('selected', self.colors['secondary'])],
+            foreground=[('selected', self.colors['white'])]
+        )
+        
+        # Multas - Cinza escuro
+        style.configure(
+            'Fines.Treeview',
+            background=self.colors['white'],
+            foreground=self.colors['text_primary'],
+            fieldbackground=self.colors['white'],
+            borderwidth=0,
+            font=self.fonts['normal']
+        )
+        style.configure(
+            'Fines.Treeview.Heading',
+            background=self.colors['dark'],
+            foreground=self.colors['white'],
+            font=self.fonts['heading'],
+            relief='flat'
+        )
+        style.map(
+            'Fines.Treeview',
+            background=[('selected', self.colors['secondary'])],
+            foreground=[('selected', self.colors['white'])]
+        )
+        
         # Estilo para Notebook (abas)
         style.configure(
             'TNotebook',
@@ -223,7 +356,7 @@ class SmartCityStyles:
             'TNotebook.Tab',
             background=self.colors['light'],
             foreground=self.colors['text_primary'],
-            padding=(20, 10),
+            padding=(15, 8),
             font=self.fonts['normal']
         )
         style.map(
