@@ -14,6 +14,15 @@ CREATE TABLE IF NOT EXISTS payment_method (
 
 CREATE TABLE IF NOT EXISTS app_user (
     id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    username VARCHAR(255) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS citizen (
+    id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    app_user_id INTEGER NOT NULL,
     first_name VARCHAR(100) NOT NULL,
     last_name VARCHAR(150) NOT NULL,
     cpf VARCHAR(11) UNIQUE NOT NULL,
@@ -21,24 +30,15 @@ CREATE TABLE IF NOT EXISTS app_user (
     email VARCHAR(255) UNIQUE NOT NULL,
     phone VARCHAR(20),
     address TEXT NOT NULL,
-    username VARCHAR(255) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT cpf CHECK (length(cpf) = 11),
-    CONSTRAINT birth_date CHECK (birth_date <= CURRENT_DATE),
-    CONSTRAINT email CHECK (email LIKE '%_@_%._%')
-);
-
-CREATE TABLE IF NOT EXISTS citizen (
-    id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    app_user_id INTEGER NOT NULL,
     biometric_reference JSONB,
     wallet_balance NUMERIC(10,2) DEFAULT 0.00,
     debt NUMERIC(10,2) DEFAULT 0.00,
     allowed BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT cpf CHECK (length(cpf) = 11),
+    CONSTRAINT birth_date CHECK (birth_date <= CURRENT_DATE),
+    CONSTRAINT email CHECK (email LIKE '%_@_%._%'),
     CONSTRAINT chk_wallet_balance CHECK (wallet_balance >= 0),
     CONSTRAINT chk_debt CHECK (debt >= 0),
     CONSTRAINT fk_user

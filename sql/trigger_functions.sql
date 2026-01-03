@@ -1,8 +1,3 @@
--- Essa função aplica multa ao wallet do cidadão quando um incidente de trânsito é criado
--- Esta função é acionada após a inserção de um incidente de trânsito
--- Deduz o valor da multa do saldo da carteira do cidadão
--- Se o saldo for insuficiente, transfere o valor para dívida e bloqueia o acesso
-
 CREATE OR REPLACE FUNCTION apply_fine_to_wallet()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -11,24 +6,31 @@ DECLARE
 BEGIN
     SELECT c.id, c.wallet_balance
     INTO v_citizen_id, v_balance
-    FROM citizen c
-    JOIN vehicle v ON v.citizen_id = c.id
-    WHERE v.id = NEW.vehicle_id
+    FROM traffic_incident ti
+    JOIN vehicle v ON v.id = ti.vehicle_id
+    JOIN citizen c ON c.id = v.citizen_id
+    WHERE ti.id = NEW.traffic_incident_id
     FOR UPDATE;
 
-    IF NEW.fine_amount IS NULL OR NEW.fine_amount = 0 THEN
+    -- Se não houver cidadão associado, não faz nada
+    IF v_citizen_id IS NULL THEN
         RETURN NEW;
     END IF;
 
-    IF v_balance >= NEW.fine_amount THEN
+    -- Se o valor da multa for zero, ignora
+    IF NEW.amount IS NULL OR NEW.amount = 0 THEN
+        RETURN NEW;
+    END IF;
+
+    IF v_balance >= NEW.amount THEN
         UPDATE citizen
-        SET wallet_balance = wallet_balance - NEW.fine_amount,
+        SET wallet_balance = wallet_balance - NEW.amount,
             updated_at = CURRENT_TIMESTAMP
         WHERE id = v_citizen_id;
     ELSE
         UPDATE citizen
         SET wallet_balance = 0,
-            debt = debt + (NEW.fine_amount - v_balance),
+            debt = debt + (NEW.amount - v_balance),
             allowed = FALSE,
             updated_at = CURRENT_TIMESTAMP
         WHERE id = v_citizen_id;
@@ -38,36 +40,54 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-
--- Essa função aplica pagamento de multa à dívida do cidadão quando um pagamento é feito
--- Esta função é acionada após a inserção de um pagamento de multa
--- Reduz a dívida do cidadão pelo valor pago e reativa o acesso ao veículo se a dívida for paga
 CREATE OR REPLACE FUNCTION apply_fine_payment()
 RETURNS TRIGGER AS $$
+DECLARE
+    v_citizen_id INTEGER;
 BEGIN
-    UPDATE citizen c
+    SELECT c.id
+    INTO v_citizen_id
+    FROM fine f
+    JOIN traffic_incident ti ON ti.id = f.traffic_incident_id
+    JOIN vehicle v ON v.id = ti.vehicle_id
+    JOIN citizen c ON c.id = v.citizen_id
+    WHERE f.id = NEW.fine_id
+    FOR UPDATE;
+
+    IF v_citizen_id IS NULL THEN
+        RETURN NEW;
+    END IF;
+
+    UPDATE citizen
     SET debt = GREATEST(debt - NEW.amount_paid, 0),
-        allowed = CASE 
-            WHEN debt - NEW.amount_paid <= 0 THEN TRUE 
-            ELSE allowed 
+        allowed = CASE
+            WHEN debt - NEW.amount_paid <= 0 THEN TRUE
+            ELSE allowed
         END,
         updated_at = CURRENT_TIMESTAMP
-    FROM traffic_incident ti
-    JOIN vehicle v ON v.id = ti.vehicle_id
-    WHERE ti.id = NEW.traffic_incident_id
-      AND c.id = v.citizen_id;
+    WHERE id = v_citizen_id;
+
+    UPDATE fine
+    SET status = 'paid',
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = NEW.fine_id
+      AND amount <= (
+          SELECT COALESCE(SUM(fp.amount_paid), 0)
+          FROM fine_payment fp
+          WHERE fp.fine_id = NEW.fine_id
+      );
 
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
+
 CREATE OR REPLACE FUNCTION audit_log_generic()
 RETURNS TRIGGER AS $$
 DECLARE
-    v_app_user_id INT;
+    v_app_user_id INTEGER;
 BEGIN
-    -- tenta pegar o usuário da aplicação a partir da sessão
-    v_app_user_id := current_setting('app.current_user_id', true)::INT;
+    v_app_user_id := current_setting('app.current_user_id', true)::INTEGER;
 
     INSERT INTO audit_log (
         table_name,
@@ -75,7 +95,8 @@ BEGIN
         row_id,
         old_values,
         new_values,
-        app_user_id
+        app_user_id,
+        performed_by_app_user_id
     )
     VALUES (
         TG_TABLE_NAME,
@@ -89,10 +110,10 @@ BEGIN
             WHEN TG_OP IN ('INSERT', 'UPDATE') THEN row_to_json(NEW)::jsonb
             ELSE NULL
         END,
+        v_app_user_id,
         v_app_user_id
     );
 
     RETURN NULL;
 END;
 $$ LANGUAGE plpgsql;
-
