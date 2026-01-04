@@ -51,6 +51,28 @@ SmartCityOS/
 
 ```mermaid
 erDiagram
+    app_user ||--o{ citizen : "1:1 (auth)"
+    app_user ||--o{ vehicle : "manages"
+    app_user ||--o{ sensor : "manages"
+    app_user ||--o{ app_user_notification : "receives"
+    app_user ||--o{ audit_log : "is_affected_by"
+    app_user ||--o{ audit_log : "performed_by"
+
+    citizen ||--o{ vehicle : "owns"
+    citizen ||--o{ vehicle_citizen : "linked_to"
+    citizen ||--o{ fine : "owes"
+
+    vehicle ||--o{ vehicle_citizen : "linked_to"
+    vehicle ||--o{ traffic_incident : "involved_in"
+
+    sensor ||--o{ reading : "generates"
+    sensor ||--o{ traffic_incident : "detects"
+
+    traffic_incident ||--|| fine : "results_in"
+    fine ||--o{ fine_payment : "has"
+
+    notification ||--o{ app_user_notification : "sent_to"
+
     app_user {
         int id PK
         varchar username UK
@@ -130,6 +152,7 @@ erDiagram
     fine {
         int id PK
         int traffic_incident_id FK
+        int citizen_id FK
         numeric amount
         varchar status
         date due_date
@@ -181,28 +204,6 @@ erDiagram
         int performed_by_app_user_id FK
         timestamp changed_at
     }
-
-    %% Relacionamentos
-    app_user ||--o{ citizen : "1:1"
-    app_user ||--o{ vehicle : "1:N"
-    app_user ||--o{ sensor : "1:N"
-    app_user ||--o{ app_user_notification : "1:N"
-    app_user ||--o{ audit_log : "1:N"
-    app_user ||--o{ audit_log : "performed_by"
-    
-    citizen ||--o{ vehicle : "1:N"
-    citizen ||--o{ vehicle_citizen : "1:N"
-    
-    vehicle ||--o{ vehicle_citizen : "1:N"
-    vehicle ||--o{ traffic_incident : "1:N"
-    
-    sensor ||--o{ reading : "1:N"
-    sensor ||--o{ traffic_incident : "1:N"
-    
-    traffic_incident ||--o{ fine : "1:1"
-    fine ||--o{ fine_payment : "1:N"
-    
-    notification ||--o{ app_user_notification : "1:N"
 ```
 
 ### Tabelas Principais
@@ -356,28 +357,32 @@ Incidentes de trânsito detectados pelo sistema.
 
 Multas aplicadas aos incidentes.
 
-**Colunas:**
+            **Colunas:**
 
-- `id` (INTEGER, PRIMARY KEY) - Identificador único da multa
-- `traffic_incident_id` (INTEGER, NOT NULL) - Incidente relacionado (FK)
-- `amount` (NUMERIC(10,2), NOT NULL) - Valor da multa
-- `status` (VARCHAR(20), DEFAULT 'pending') - Status (pending/paid/cancelled)
-- `due_date` (DATE) - Data de vencimento
-- `created_at` (TIMESTAMP) - Data de emissão
-- `updated_at` (TIMESTAMP) - Data da última atualização
+            - `id` (INTEGER, PRIMARY KEY) - Identificador único da multa
+            - `traffic_incident_id` (INTEGER, NOT NULL) - Incidente relacionado (FK)
+            - `citizen_id` (INTEGER, NOT NULL) - Cidadão responsável pela multa (FK)
+            - `amount` (NUMERIC(10,2), NOT NULL) - Valor da multa
+            - `status` (VARCHAR(20), DEFAULT 'pending') - Status (pending/paid/cancelled)
+            - `due_date` (DATE) - Data de vencimento
+            - `created_at` (TIMESTAMP) - Data de emissão
+            - `updated_at` (TIMESTAMP) - Data da última atualização
 
-**Constraints:**
+            **Constraints:**
 
-- `chk_fine_amount` - Garante que o valor não seja negativo
-- `chk_fine_status` - Limita os valores de status
-- `fk_traffic_incident` - Chave estrangeira para `traffic_incident`
+            - `chk_fine_amount` - Garante que o valor não seja negativo
+            - `chk_fine_status` - Limita os valores de status
+            - `fk_traffic_incident` - Chave estrangeira para `traffic_incident` (ON DELETE CASCADE)
+            - `fk_citizen` - Chave estrangeira para `citizen` (ON DELETE CASCADE)
 
-#### 9. `fine_payment`
+            **Mudança Importante:**
 
-Pagamentos de multas realizados.
+            - `citizen_id` foi adicionado diretamente à tabela `fine` para otimizar consultas
+            - Antes era necessário JOIN através de `traffic_incident` → `vehicle` → `citizen`
 
-**Colunas:**
+            #### 9. `fine_payment`
 
+            Pagamentos de multas realizados.
 - `id` (INTEGER, PRIMARY KEY) - Identificador único do pagamento
 - `fine_id` (INTEGER, NOT NULL) - Multa paga (FK)
 - `amount_paid` (NUMERIC(10,2), NOT NULL) - Valor pago
@@ -482,33 +487,68 @@ Registro de auditoria do sistema.
 
 **Descrição:** Cada tabela possui um trigger que aciona a função `audit_log_generic()` para registrar todas as operações DML.
 
-### 2. Funções de Processamento de Multas (Disponíveis mas não implementadas como triggers)
+### 2. Triggers de Processamento de Multas
 
 #### `apply_fine_to_wallet()`
 
 **Função:** `apply_fine_to_wallet()`
-**Evento:** AFTER INSERT ON `fine` (não implementado)
-**Descrição:** Função disponível para aplicar automaticamente multas à carteira do cidadão quando uma multa é criada.
+**Evento:** AFTER INSERT ON `fine`
+**Descrição:** Aplica automaticamente multas à carteira do cidadão quando uma multa é criada.
 
 **Lógica:**
 
-- Identifica o cidadão proprietário do veículo através do relacionamento fine→traffic_incident→vehicle→citizen
-- Verifica se há valor de multa definido em `fine.amount`
-- Se o saldo for suficiente, deduz da carteira
-- Se insuficiente, zera o saldo, acumula como dívida e bloqueia acesso
+- Verifica se multa está cancelada ou valor zero (NÃO faz nada)
+- Busca saldo do cidadão diretamente por `citizen_id` (NOVA ESTRUTURA)
+- Se saldo >= valor da multa:
+  - Deduz valor do `wallet_balance`
+  - Mantém `debt` inalterado
+- Se saldo < valor da multa:
+  - Zera `wallet_balance`
+  - Adiciona diferença à `debt`
+  - Define `allowed = FALSE`
+- Atualiza `updated_at` do cidadão
 
 #### `apply_fine_payment()`
 
 **Função:** `apply_fine_payment()`
-**Evento:** AFTER INSERT ON `fine_payment` (não implementado)
-**Descrição:** Função disponível para processar pagamentos de multas e atualizar o status do cidadão.
+**Evento:** AFTER INSERT ON `fine_payment`
+**Descrição:** Processa pagamentos de multas e atualiza o status do cidadão.
 
 **Lógica:**
 
-- Reduz a dívida do cidadão pelo valor pago
-- Reativa o acesso quando a dívida for completamente paga
-- Atualiza status da multa para 'paid' quando totalmente paga
+- Busca dívida atual do cidadão diretamente por `citizen_id` (NOVA ESTRUTURA)
+- Reduz `debt` pelo valor pago (nunca negativo)
+- Reativa `allowed = TRUE` quando dívida zerada
+- Se método = "Carteira Digital":
+  - Também deduz do `wallet_balance`
+- Marca multa como "paid" quando totalmente quitada
 - Atualiza timestamps automaticamente
+
+#### `cancel_fines_when_citizen_deleted()`
+
+**Função:** `cancel_fines_when_citizen_deleted()`
+**Evento:** BEFORE DELETE ON `citizen`
+**Descrição:** Cancela multas pendentes quando um cidadão é excluído.
+
+**Lógica:**
+
+- Busca multas pendentes do cidadão através do relacionamento
+- Define status como "cancelled"
+- Atualiza `updated_at`
+
+#### `prevent_delete_citizen_with_pending_fines()`
+
+**Função:** `prevent_delete_citizen_with_pending_fines()`
+**Evento:** BEFORE DELETE ON `citizen`
+**Descrição:** Impede exclusão de cidadão com multas pendentes.
+
+**Lógica:**
+
+- Conta multas pendentes diretamente por `citizen_id` (NOVA ESTRUTURA)
+- Se houver multas pendentes:
+  - Levanta exceção com mensagem clara
+- Se não houver:
+  - Permite exclusão normalmente
 
 ## 🚀 Índices de Performance
 
@@ -521,6 +561,7 @@ Registro de auditoria do sistema.
 ### Índices de Multas
 
 - `idx_fine_traffic_incident` - Relacionamento multa-incidente
+- `idx_fine_citizen` - Busca por cidadão (NOVO)
 - `idx_fine_pending` - Multas pendentes (índice parcial)
 - `idx_fine_due_date` - Ordenação por vencimento
 
@@ -550,6 +591,7 @@ Registro de auditoria do sistema.
 - `idx_audit_log_changed_at` - Ordenação por data
 - `idx_audit_log_table_operation` - Busca por tabela e operação
 - `idx_audit_log_row_id` - Busca por registro específico
+- `idx_audit_log_table_row` - Busca composta por tabela e registro (NOVO)
 
 ## 🔧 Configuração e Instalação
 
@@ -644,32 +686,70 @@ pip install psycopg python-dotenv pandas tabulate
 - Rastreabilidade completa
 - Dados anteriores e posteriores
 
+## 🧪 Interface Gráfica (GUI)
+
+### Tecnologias
+
+- **Framework**: Tkinter com ttk (tema clam)
+- **Estilos**: Sistema de cores e fontes customizadas
+- **Componentes**: Treeviews, Forms, Dialogs modais
+
+### Funcionalidades da GUI
+
+#### Dashboard
+- Cards com estatísticas em tempo real
+- Gráficos de visualização
+- Indicadores de performance
+
+#### Gestão de Entidades
+- **Cidadãos**: CRUD completo com filtros
+- **Veículos**: CRUD com validação de placa
+- **Sensores**: Gestão com status ativo/inativo
+- **Incidentes**: Registro com seleção de veículo/sensor
+- **Multas**: Geração e pagamento com integração automática
+
+#### Console SQL Seguro
+- Editor com syntax highlighting
+- Execução segura (SELECT apenas)
+- Rollback automático em erros
+- Suporte a comentários SQL
+- Validação de comandos perigosos
+
+#### Sistema de Notificações
+- Lista de notificações por usuário
+- Controle de leitura
+- Criação de novas notificações
+
 ## 🔄 Fluxo de Trabalho
 
-### Fluxo de Incidente de Trânsito (Manual)
+### Fluxo de Incidente de Trânsito
 
 1. Sensor detecta infração
 2. Sistema cria `traffic_incident`
-3. Sistema cria `fine` manualmente (processo não automatizado)
-4. **Nota:** As funções `apply_fine_to_wallet()` e `apply_fine_payment()` existem mas não estão conectadas como triggers
-5. Multa precisa ser processada manualmente ou via aplicação
-6. Notificação pode ser gerada automaticamente
+3. Sistema cria `fine` manualmente ou automaticamente
+4. **Trigger `apply_fine_to_wallet()` é acionado automaticamente:**
+   - Se saldo suficiente → Deduz da carteira
+   - Se saldo insuficiente → Zera saldo + acumula dívida + bloqueia acesso
+5. Pagamento realizado → `fine_payment` → **Trigger `apply_fine_payment()` é acionado:**
+   - Reduz dívida automaticamente
+   - Se "Carteira Digital" → Reduz saldo também
+   - Reativa acesso automaticamente
+   - Marca multa como "paid"
 
-### Fluxo de Pagamento (Manual)
+### Fluxo de Exclusão de Cidadão
 
-1. Cidadão realiza pagamento
-2. Registro em `fine_payment`
-3. **Nota:** O trigger `apply_fine_payment` não está implementado
-4. Dívida precisa ser atualizada manualmente ou via aplicação
-5. Reativação de acesso precisa ser feita manualmente
-6. Auditoria registra operação automaticamente
+1. Tentativa de exclusão de cidadão
+2. **Trigger `prevent_delete_citizen_with_pending_fines()` verifica:**
+   - Se há multas pendentes → Impede exclusão com erro claro
+   - Se não há multas → Permite exclusão
+3. Se exclusão permitida → **Trigger `cancel_fines_when_citizen_deleted()` cancela multas pendentes
 
 ### Fluxo de Auditoria (Automático)
 
 1. Qualquer operação DML em tabelas auditadas
 2. Trigger correspondente é acionado automaticamente
 3. Função `audit_log_generic()` registra em `audit_log`
-4. Dados anteriores e posteriores são armazenados
+4. Dados anteriores e posteriores são armazenados em JSONB
 5. Usuário da sessão é capturado via configuração
 
 ## 🧪 Testes e Exemplos
