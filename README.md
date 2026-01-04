@@ -32,23 +32,27 @@ O SmartCityOS é um sistema de gestão urbana inteligente desenvolvido em Python
 
 ## ⚡ Automação
 
-### Triggers Principais
+### Triggers Principais (15 ativos)
 
-1. **apply_fine_to_wallet()**: Aplica multas automaticamente à carteira do cidadão
-2. **apply_fine_payment()**: Processa pagamentos e reativa acesso
-3. **audit_log_function()**: Registra todas as alterações para auditoria
+1. **Auditoria (8)**: Registro completo de todas as operações DML
+2. **Soft Delete (4)**: Exclusão lógica automática para usuários, cidadãos, veículos, sensores
+3. **Proteção de Dados (2)**: Bloqueio de atualização em registros deletados
+4. **Processamento de Multas (4)**: Aplicação automática, pagamentos, cancelamentos e validações
 
 ### Fluxo Automatizado
 
 - Sensor detecta infração → Incidente criado → Multa aplicada → Saldo deduzido/Dívida acumulada → Acesso bloqueado se necessário
 - Pagamento realizado → Dívida reduzida → Acesso reativado automaticamente
+- Soft delete automático com proteção de dados
+- Auditoria completa de todas as operações
 
 ## 🚀 Performance
 
-- **17 índices estratégicos** para otimização de consultas
-- Índices parciais para queries frequentes
-- Processamento automático no banco de dados
-- Consistência garantida via triggers
+- **21 índices estratégicos** para otimização de consultas
+- Índices únicos condicionais para soft delete
+- Índices filtrados para queries frequentes (ativos, pendentes, não lidas)
+- Otimização direta: `citizen_id` em `fine` elimina JOINs
+- 15 triggers ativos com processamento automático
 
 ## 🔧 Instalação
 
@@ -76,20 +80,26 @@ pip install -r requirements.txt
 
 ## 📊 Funcionalidades
 
-- ✅ Gestão completa de usuários e cidadãos
-- ✅ Cadastro e controle de veículos
-- ✅ Monitoramento por sensores urbanos
-- ✅ Sistema de multas automatizado
-- ✅ Pagamentos e reativação automática
-- ✅ Sistema de notificações
-- ✅ Auditoria completa e rastreabilidade
+- ✅ Gestão completa de usuários e cidadãos com soft delete
+- ✅ Cadastro e controle de veículos com reutilização de placas
+- ✅ Monitoramento por sensores urbanos com desativação automática
+- ✅ Sistema de multas 100% automatizado
+- ✅ Pagamentos e reativação automática de acesso
+- ✅ Sistema de notificações com controle de leitura
+- ✅ Auditoria completa e rastreabilidade de operações
+- ✅ Interface gráfica profissional com dashboard
+- ✅ Relatórios Excel com múltiplas abas e gráficos
+- ✅ Proteção de dados com bloqueio de atualização em registros deletados
 
 ## 🔒 Segurança
 
-- Bloqueio automático por dívida
-- Validação de CPF único
-- Hash de senhas seguro
-- Auditoria completa de operações
+- Bloqueio automático por dívida com reativação automática
+- Validação de CPF/email únicos apenas para registros ativos
+- Hash de senhas seguro com gerenciamento de sessão
+- Soft delete protege dados sensíveis mantendo integridade
+- Auditoria completa de operações com usuário e timestamp
+- Proteção contra atualização de registros deletados
+- Logs de acesso para conformidade e forense
 
 ## 📝 Documentação Completa
 
@@ -101,6 +111,15 @@ Para detalhes técnicos completos, consulte o arquivo `DOCUMENTATION.md` que con
 - Fluxos de trabalho detalhados
 - Exemplos e guias de configuração
 
+## Contribuição
+
+Contribuições são bem-vindas! Por favor:
+
+1. Fork do projeto
+2. Criar branch para feature
+3. Submeter pull request
+4. Manter padrão de código e documentação
+
 ## 👨‍💻 Autor
 
 Desenvolvido por **Felipe Cidade Soares**
@@ -109,4 +128,4 @@ Desenvolvido por **Felipe Cidade Soares**
 
 ## 📄 Licença
 
-MIT License - Consulte arquivo LICENSE para detalhes
+MIT License - Consulte arquivo LICENSE para detalhes.
