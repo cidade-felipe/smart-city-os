@@ -12,22 +12,24 @@ CREATE TABLE IF NOT EXISTS payment_method (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS app_user (
+CREATE TABLE app_user (
     id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    username VARCHAR(255) UNIQUE NOT NULL,
+    username VARCHAR(255) NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
+    deleted_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
 
 CREATE TABLE IF NOT EXISTS citizen (
     id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     app_user_id INTEGER NOT NULL,
     first_name VARCHAR(100) NOT NULL,
     last_name VARCHAR(150) NOT NULL,
-    cpf VARCHAR(11) UNIQUE NOT NULL,
+    cpf VARCHAR(11) NOT NULL,
     birth_date DATE NOT NULL,
-    email VARCHAR(255) UNIQUE NOT NULL,
+    email VARCHAR(255) NOT NULL,
     phone VARCHAR(20),
     address TEXT NOT NULL,
     biometric_reference JSONB,
@@ -36,6 +38,7 @@ CREATE TABLE IF NOT EXISTS citizen (
     allowed BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP,
     CONSTRAINT cpf CHECK (length(cpf) = 11),
     CONSTRAINT birth_date CHECK (birth_date <= CURRENT_DATE),
     CONSTRAINT email CHECK (email LIKE '%_@_%._%'),
@@ -57,6 +60,7 @@ CREATE TABLE IF NOT EXISTS sensor (
     last_reading JSONB,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP,
     CONSTRAINT fk_user
       FOREIGN KEY (app_user_id)
       REFERENCES app_user(id)
@@ -66,13 +70,14 @@ CREATE TABLE IF NOT EXISTS sensor (
 CREATE TABLE IF NOT EXISTS vehicle (
     id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     app_user_id INTEGER NOT NULL,
-    license_plate VARCHAR(12) UNIQUE NOT NULL,
+    license_plate VARCHAR(12) NOT NULL,
     model VARCHAR(100) NOT NULL,
     year INTEGER NOT NULL,
     citizen_id INTEGER,
     allowed BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP,
     CONSTRAINT fk_citizen
       FOREIGN KEY (citizen_id)
       REFERENCES citizen(id)

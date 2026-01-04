@@ -161,3 +161,83 @@ BEGIN
     RETURN OLD;
 END;
 $$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION set_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION citizen_soft_delete()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF OLD.deleted_at IS NULL AND NEW.deleted_at IS NOT NULL THEN
+        NEW.allowed := FALSE;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION sensor_soft_delete()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF OLD.deleted_at IS NULL AND NEW.deleted_at IS NOT NULL THEN
+        NEW.active := FALSE;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION vehicle_soft_delete()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF OLD.deleted_at IS NULL AND NEW.deleted_at IS NOT NULL THEN
+        NEW.allowed := FALSE;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION block_update_deleted_citizen()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF OLD.deleted_at IS NOT NULL THEN
+        RAISE EXCEPTION
+            'Citizen % is deleted and cannot be updated',
+            OLD.id;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION block_update_deleted_sensor()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF OLD.deleted_at IS NOT NULL THEN
+        RAISE EXCEPTION
+            'Sensor % is deleted and cannot be updated',
+            OLD.id;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION block_update_deleted_sensor()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF OLD.deleted_at IS NOT NULL THEN
+        RAISE EXCEPTION
+            'Sensor % is deleted and cannot be updated',
+            OLD.id;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
