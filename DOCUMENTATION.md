@@ -51,158 +51,89 @@ SmartCityOS/
 
 ```mermaid
 erDiagram
-    app_user ||--o{ citizen : "1:1 (auth)"
-    app_user ||--o{ vehicle : "manages"
-    app_user ||--o{ sensor : "manages"
-    app_user ||--o{ app_user_notification : "receives"
-    app_user ||--o{ audit_log : "is_affected_by"
-    app_user ||--o{ audit_log : "performed_by"
+    app_user ||--|| citizen : "1:1"
+    app_user ||--o{ vehicle : "1:N"
+    app_user ||--o{ sensor : "1:N"
+    app_user ||--o{ app_user_notification : "1:N"
+    app_user ||--o{ audit_log : "1:N (affected)"
+    app_user ||--o{ audit_log : "1:N (performed)"
 
-    citizen ||--o{ vehicle : "owns"
-    citizen ||--o{ vehicle_citizen : "linked_to"
-    citizen ||--o{ fine : "owes"
+    citizen ||--o{ vehicle : "1:N"
+    citizen ||--o{ vehicle_citizen : "1:N"
+    citizen ||--o{ fine : "1:N"
 
-    vehicle ||--o{ vehicle_citizen : "linked_to"
-    vehicle ||--o{ traffic_incident : "involved_in"
+    vehicle ||--o{ vehicle_citizen : "1:N"
+    vehicle ||--o{ traffic_incident : "1:N"
 
-    sensor ||--o{ reading : "generates"
-    sensor ||--o{ traffic_incident : "detects"
+    sensor ||--o{ reading : "1:N"
+    sensor ||--o{ traffic_incident : "1:N"
 
-    traffic_incident ||--|| fine : "results_in"
-    fine ||--o{ fine_payment : "has"
+    traffic_incident ||--|| fine : "1:1"
+    fine ||--o{ fine_payment : "1:N"
 
-    notification ||--o{ app_user_notification : "sent_to"
+    notification ||--o{ app_user_notification : "1:N"
 
     app_user {
         int id PK
-        varchar username UK
-        varchar password_hash
-        timestamp created_at
-        timestamp updated_at
+        varchar username
     }
-
     citizen {
         int id PK
         int app_user_id FK
-        varchar first_name
-        varchar last_name
-        varchar cpf UK
-        date birth_date
-        varchar email UK
-        varchar phone
-        text address
-        jsonb biometric_reference
+        varchar cpf
         numeric wallet_balance
         numeric debt
-        boolean allowed
-        timestamp created_at
-        timestamp updated_at
     }
-
     vehicle {
         int id PK
         int app_user_id FK
-        varchar license_plate UK
-        varchar model
-        int year
+        varchar license_plate
         int citizen_id FK
-        boolean allowed
-        timestamp created_at
-        timestamp updated_at
     }
-
     vehicle_citizen {
         int id PK
         int vehicle_id FK
         int citizen_id FK
     }
-
     sensor {
         int id PK
         int app_user_id FK
         varchar model
-        varchar type
-        text location
-        boolean active
-        jsonb last_reading
-        timestamp created_at
-        timestamp updated_at
     }
-
     reading {
         int id PK
         int sensor_id FK
         jsonb value
-        timestamp timestamp
-        timestamp created_at
-        timestamp updated_at
     }
-
     traffic_incident {
         int id PK
         int vehicle_id FK
         int sensor_id FK
-        timestamp occurred_at
-        text location
-        text description
-        timestamp created_at
-        timestamp updated_at
     }
-
     fine {
         int id PK
         int traffic_incident_id FK
         int citizen_id FK
         numeric amount
-        varchar status
-        date due_date
-        timestamp created_at
-        timestamp updated_at
     }
-
     fine_payment {
         int id PK
         int fine_id FK
         numeric amount_paid
-        timestamp paid_at
-        varchar payment_method
-        timestamp created_at
-        timestamp updated_at
     }
-
-    payment_method {
-        int id PK
-        varchar name UK
-        timestamp created_at
-    }
-
     notification {
         int id PK
         varchar type
-        text message
-        timestamp created_at
-        timestamp updated_at
     }
-
     app_user_notification {
         int id PK
         int notification_id FK
         int app_user_id FK
-        timestamp read_at
-        timestamp created_at
-        timestamp updated_at
     }
-
     audit_log {
         int id PK
-        varchar table_name
-        varchar operation
-        int row_id
-        jsonb old_values
-        jsonb new_values
         int app_user_id FK
         int performed_by_app_user_id FK
-        timestamp changed_at
     }
 ```
 
