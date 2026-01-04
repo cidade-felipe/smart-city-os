@@ -254,32 +254,33 @@ Incidentes de trânsito detectados pelo sistema.
 
 Multas aplicadas aos incidentes.
 
-            **Colunas:**
+**Colunas:**
 
-            - `id` (INTEGER, PRIMARY KEY) - Identificador único da multa
-            - `traffic_incident_id` (INTEGER, NOT NULL) - Incidente relacionado (FK)
-            - `citizen_id` (INTEGER, NOT NULL) - Cidadão responsável pela multa (FK)
-            - `amount` (NUMERIC(10,2), NOT NULL) - Valor da multa
-            - `status` (VARCHAR(20), DEFAULT 'pending') - Status (pending/paid/cancelled)
-            - `due_date` (DATE) - Data de vencimento
-            - `created_at` (TIMESTAMP) - Data de emissão
-            - `updated_at` (TIMESTAMP) - Data da última atualização
+- `id` (INTEGER, PRIMARY KEY) - Identificador único da multa
+- `traffic_incident_id` (INTEGER, NOT NULL) - Incidente relacionado (FK)
+- `citizen_id` (INTEGER, NOT NULL) - Cidadão responsável pela multa (FK)
+- `amount` (NUMERIC(10,2), NOT NULL) - Valor da multa
+- `status` (VARCHAR(20), DEFAULT 'pending') - Status (pending/paid/cancelled)
+- `due_date` (DATE) - Data de vencimento
+- `created_at` (TIMESTAMP) - Data de emissão
+- `updated_at` (TIMESTAMP) - Data da última atualização
 
-            **Constraints:**
+**Constraints:**
 
-            - `chk_fine_amount` - Garante que o valor não seja negativo
-            - `chk_fine_status` - Limita os valores de status
-            - `fk_traffic_incident` - Chave estrangeira para `traffic_incident` (ON DELETE CASCADE)
-            - `fk_citizen` - Chave estrangeira para `citizen` (ON DELETE CASCADE)
+- `chk_fine_amount` - Garante que o valor não seja negativo
+- `chk_fine_status` - Limita os valores de status
+- `fk_traffic_incident` - Chave estrangeira para `traffic_incident` (ON DELETE CASCADE)
+- `fk_citizen` - Chave estrangeira para `citizen` (ON DELETE CASCADE)
 
-            **Mudança Importante:**
+**Mudança Importante:**
 
-            - `citizen_id` foi adicionado diretamente à tabela `fine` para otimizar consultas
-            - Antes era necessário JOIN através de `traffic_incident` → `vehicle` → `citizen`
+- `citizen_id` foi adicionado diretamente à tabela `fine` para otimizar consultas
+- Antes era necessário JOIN através de `traffic_incident` → `vehicle` → `citizen`
 
-            #### 9. `fine_payment`
+#### 9. `fine_payment`
 
-            Pagamentos de multas realizados.
+Pagamentos de multas realizados.
+
 - `id` (INTEGER, PRIMARY KEY) - Identificador único do pagamento
 - `fine_id` (INTEGER, NOT NULL) - Multa paga (FK)
 - `amount_paid` (NUMERIC(10,2), NOT NULL) - Valor pago
