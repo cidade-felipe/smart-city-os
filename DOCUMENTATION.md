@@ -53,6 +53,7 @@ SmartCityOS/
   .edgeLabel {
     font-size: 18px !important;
     font-weight: bold !important;
+    fill: #333333 !important;
   }
 </style>
 
