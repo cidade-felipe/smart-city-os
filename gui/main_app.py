@@ -2548,7 +2548,7 @@ class SmartCityOSGUI:
             charts_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
             
             # Criar gráficos Plotly inline
-            self.create_plotly_charts(charts_frame, self.period_var.get())
+            self.create_plotly_html_inline(charts_frame, self.period_var.get())
             
             # Marcar que o dashboard foi inicializado
             self._dashboard_initialized = True
@@ -2558,6 +2558,431 @@ class SmartCityOSGUI:
         except Exception as e:
             messagebox.showerror("Erro", f"Erro ao carregar dashboard: {str(e)}")
     
+    def get_dashboard_data(self, period):
+        """Carrega dados do banco para o dashboard baseado no período"""
+        try:
+            import psycopg2 as psy
+            import psycopg2.extras
+            
+            # Converter período em dias para o SQL
+            period_days = {
+                "Últimos 7 dias": 7,
+                "Últimos 30 dias": 30,
+                "Últimos 90 dias": 90,
+                "Todo o período": 365  # Aproximadamente 1 ano
+            }
+            
+            days = period_days.get(period, 30)
+            
+            # Carregar dados do banco com filtro de período
+            with psy.connect(self.get_connection_string()) as conn:
+                # Configurar row_factory para retornar dicionários
+                conn.cursor_factory = psycopg2.extras.RealDictCursor
+                
+                with conn.cursor() as cur:
+                    
+                    # Dados para gráficos
+                    data = {}
+                    
+                    # 1. Evolução de incidentes (com filtro de período específico)
+                    if days == 7:
+                        cur.execute("""
+                            SELECT DATE(occurred_at) as date, COUNT(*) as incidents
+                            FROM traffic_incident 
+                            WHERE occurred_at >= CURRENT_DATE - INTERVAL '7 days'
+                            GROUP BY DATE(occurred_at)
+                            ORDER BY date
+                        """)
+                    elif days == 30:
+                        cur.execute("""
+                            SELECT DATE(occurred_at) as date, COUNT(*) as incidents
+                            FROM traffic_incident 
+                            WHERE occurred_at >= CURRENT_DATE - INTERVAL '30 days'
+                            GROUP BY DATE(occurred_at)
+                            ORDER BY date
+                        """)
+                    elif days == 90:
+                        cur.execute("""
+                            SELECT DATE(occurred_at) as date, COUNT(*) as incidents
+                            FROM traffic_incident 
+                            WHERE occurred_at >= CURRENT_DATE - INTERVAL '90 days'
+                            GROUP BY DATE(occurred_at)
+                            ORDER BY date
+                        """)
+                    else:  # Todo o período
+                        cur.execute("""
+                            SELECT DATE_TRUNC('month', occurred_at) as date, COUNT(*) as incidents
+                            FROM traffic_incident 
+                            GROUP BY DATE_TRUNC('month', occurred_at)
+                            ORDER BY date
+                        """)
+                    incident_timeline = cur.fetchall()
+                    data['incident_timeline'] = incident_timeline
+                    
+                    # 2. Multas por status (com filtro de período específico)
+                    if days == 7:
+                        cur.execute("""
+                            SELECT status, COUNT(*) as count, COALESCE(SUM(amount), 0) as total_amount
+                            FROM fine 
+                            WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'
+                            GROUP BY status
+                        """)
+                    elif days == 30:
+                        cur.execute("""
+                            SELECT status, COUNT(*) as count, COALESCE(SUM(amount), 0) as total_amount
+                            FROM fine 
+                            WHERE created_at >= CURRENT_DATE - INTERVAL '30 days'
+                            GROUP BY status
+                        """)
+                    elif days == 90:
+                        cur.execute("""
+                            SELECT status, COUNT(*) as count, COALESCE(SUM(amount), 0) as total_amount
+                            FROM fine 
+                            WHERE created_at >= CURRENT_DATE - INTERVAL '90 days'
+                            GROUP BY status
+                        """)
+                    else:  # Todo o período
+                        cur.execute("""
+                            SELECT status, COUNT(*) as count, COALESCE(SUM(amount), 0) as total_amount
+                            FROM fine 
+                            GROUP BY status
+                        """)
+                    fines_by_status = cur.fetchall()
+                    data['fines_by_status'] = fines_by_status
+                    
+                    # 3. Veículos por status (sem filtro de período - dados atuais)
+                    cur.execute("""
+                        SELECT CASE WHEN allowed = TRUE THEN 'Ativos' ELSE 'Bloqueados' END as status, 
+                               COUNT(*) as count
+                        FROM vehicle 
+                        GROUP BY allowed
+                    """)
+                    vehicles_by_status = cur.fetchall()
+                    data['vehicles_by_status'] = vehicles_by_status
+                    
+                    # 4. Sensores por tipo (dados atuais)
+                    cur.execute("""
+                        SELECT type, COUNT(*) as count, 
+                               COUNT(CASE WHEN active = TRUE THEN 1 END) as active
+                        FROM sensor 
+                        GROUP BY type
+                        ORDER BY count DESC
+                    """)
+                    sensors_by_type = cur.fetchall()
+                    data['sensors_by_type'] = sensors_by_type
+                    
+                    # 5. Crescimento de usuários (com filtro de período específico)
+                    if days == 7:
+                        cur.execute("""
+                            SELECT DATE(created_at) as date, COUNT(*) as new_users
+                            FROM app_user 
+                            WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'
+                            GROUP BY DATE(created_at)
+                            ORDER BY date
+                        """)
+                    elif days == 30:
+                        cur.execute("""
+                            SELECT DATE_TRUNC('week', created_at) as date, COUNT(*) as new_users
+                            FROM app_user 
+                            WHERE created_at >= CURRENT_DATE - INTERVAL '30 days'
+                            GROUP BY DATE_TRUNC('week', created_at)
+                            ORDER BY date
+                        """)
+                    elif days == 90:
+                        cur.execute("""
+                            SELECT DATE_TRUNC('week', created_at) as date, COUNT(*) as new_users
+                            FROM app_user 
+                            WHERE created_at >= CURRENT_DATE - INTERVAL '90 days'
+                            GROUP BY DATE_TRUNC('week', created_at)
+                            ORDER BY date
+                        """)
+                    else:  # Todo o período
+                        cur.execute("""
+                            SELECT DATE_TRUNC('month', created_at) as date, COUNT(*) as new_users
+                            FROM app_user 
+                            GROUP BY DATE_TRUNC('month', created_at)
+                            ORDER BY date
+                        """)
+                    user_growth = cur.fetchall()
+                    data['user_growth'] = user_growth
+            
+            return data
+            
+        except Exception as e:
+            print(f"Erro ao carregar dados do dashboard: {e}")
+            # Retornar dados vazios em caso de erro
+            return {
+                'incident_timeline': [],
+                'fines_by_status': [],
+                'vehicles_by_status': [],
+                'sensors_by_type': [],
+                'user_growth': []
+            }
+
+    def create_plotly_html_inline(self, parent, period):
+        """Cria gráficos Plotly inline usando HTML embutido no Tkinter"""
+        try:
+            import plotly.graph_objects as go
+            import plotly.express as px
+            from plotly.subplots import make_subplots
+            import pandas as pd
+            import numpy as np
+            import tempfile
+            import os
+            from PIL import Image, ImageTk
+            import webbrowser
+            import threading
+            import json
+            
+            # Carregar dados do banco
+            data = self.get_dashboard_data(period)
+            
+            # Criar dashboard completo
+            fig = make_subplots(
+                rows=3, cols=2,
+                subplot_titles=(f'Incidentes ({period})', f'Multas por Status ({period})', 
+                                f'Veículos por Status ({period})', f'Sensores por Tipo ({period})',
+                                f'Crescimento de Usuários ({period})', f'Resumo Financeiro ({period})'),
+                specs=[[{"secondary_y": False}, {"type": "pie"}],
+                       [{"secondary_y": False}, {"type": "bar"}],
+                       [{"secondary_y": False}, {"type": "indicator"}]],
+                vertical_spacing=0.08,
+                horizontal_spacing=0.05
+            )
+            
+            # Adicionar traces
+            if data['incident_timeline']:
+                df_incidents = pd.DataFrame(data['incident_timeline'])
+                df_incidents['incidents'] = df_incidents['incidents'].astype(int)
+                df_incidents['date'] = pd.to_datetime(df_incidents['date']).dt.strftime('%Y-%m-%d')
+                
+                fig.add_trace(
+                    go.Scatter(x=df_incidents['date'], y=df_incidents['incidents'],
+                              mode='lines+markers', name='Incidentes',
+                              line=dict(color='#FF6B6B', width=3),
+                              marker=dict(size=8)),
+                    row=1, col=1
+                )
+            
+            if data['fines_by_status']:
+                df_fines = pd.DataFrame(data['fines_by_status'])
+                status_map = {'pending': 'Pendentes', 'paid': 'Pagas', 'overdue': 'Vencidas', 'cancelled': 'Canceladas'}
+                df_fines['status_display'] = df_fines['status'].map(status_map)
+                df_fines['count'] = df_fines['count'].astype(int)
+                
+                fig.add_trace(
+                    go.Pie(labels=df_fines['status_display'], values=df_fines['count'],
+                           name="Multas", hole=0.4,
+                           marker_colors=['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4']),
+                    row=1, col=2
+                )
+            
+            if data['vehicles_by_status']:
+                df_vehicles = pd.DataFrame(data['vehicles_by_status'])
+                df_vehicles['count'] = df_vehicles['count'].astype(int)
+                
+                fig.add_trace(
+                    go.Bar(x=df_vehicles['status'], y=df_vehicles['count'],
+                           name='Veículos', marker_color='#4ECDC4'),
+                    row=2, col=1
+                )
+            
+            if data['sensors_by_type']:
+                df_sensors = pd.DataFrame(data['sensors_by_type'])
+                df_sensors['count'] = df_sensors['count'].astype(int)
+                
+                fig.add_trace(
+                    go.Bar(y=df_sensors['type'], x=df_sensors['count'],
+                           name='Sensores', orientation='h',
+                           marker_color='#45B7D1'),
+                    row=2, col=2
+                )
+            
+            if data['user_growth']:
+                df_users = pd.DataFrame(data['user_growth'])
+                df_users['new_users'] = df_users['new_users'].astype(int)
+                df_users['date'] = pd.to_datetime(df_users['date']).dt.strftime('%Y-%m-%d')
+                
+                fig.add_trace(
+                    go.Scatter(x=df_users['date'], y=df_users['new_users'],
+                              mode='lines+markers', name='Novos Usuários',
+                              line=dict(color='#96CEB4', width=3),
+                              marker=dict(size=8)),
+                    row=3, col=1
+                )
+            
+            if data['fines_by_status']:
+                df_fines = pd.DataFrame(data['fines_by_status'])
+                df_fines['total_amount'] = pd.to_numeric(df_fines['total_amount'], errors='coerce').fillna(0).astype(float)
+                
+                total_amount = float(df_fines['total_amount'].sum())
+                pending_amount = float(df_fines[df_fines['status'] == 'pending']['total_amount'].sum() if len(df_fines[df_fines['status'] == 'pending']) > 0 else 0)
+                
+                fig.add_trace(
+                    go.Indicator(
+                        mode="number+gauge+delta",
+                        value=total_amount,
+                        domain={'x': [0, 1], 'y': [0, 1]},
+                        title={'text': "Valor Total de Multas"},
+                        delta={'reference': pending_amount},
+                        gauge={
+                            'axis': {'range': [None, total_amount * 1.2] if total_amount > 0 else [0, 100]},
+                            'bar': {'color': "#FF6B6B"},
+                            'steps': [
+                                {'range': [0, total_amount * 0.5] if total_amount > 0 else [0, 50], 'color': "lightgray"},
+                                {'range': [total_amount * 0.5, total_amount] if total_amount > 0 else [50, 100], 'color': "gray"}
+                            ],
+                            'threshold': {
+                                'line': {'color': "red", 'width': 4},
+                                'thickness': 0.75,
+                                'value': (total_amount * 0.9) if total_amount > 0 else 90
+                            }
+                        }
+                    ),
+                    row=3, col=2
+                )
+            
+            # Configurar layout
+            fig.update_layout(
+                title_text=f"📊 SmartCityOS Dashboard<br>Período: {period}",
+                title_x=0.5,
+                title_y=0.98,
+                title_font_size=18,
+                height=800,
+                showlegend=True,
+                template="plotly_white",
+                font=dict(size=10),
+                margin=dict(l=50, r=50, t=100, b=50),
+                hovermode='closest'
+            )
+            
+            # Criar HTML inline
+            def create_inline_html():
+                try:
+                    html_content = f"""
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <meta charset="utf-8">
+                        <title>SmartCityOS Dashboard</title>
+                        <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+                        <style>
+                            body {{
+                                margin: 0;
+                                padding: 5px;
+                                font-family: Arial, sans-serif;
+                                background-color: {self.styles.colors.get('background', '#f5f5f5')};
+                                overflow: auto;
+                            }}
+                            #plotly-div {{
+                                width: 100%;
+                                height: 750px;
+                                border-radius: 8px;
+                                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                            }}
+                        </style>
+                    </head>
+                    <body>
+                        <div id="plotly-div"></div>
+                        <script>
+                            var plotlyData = {fig.to_json()};
+                            Plotly.newPlot('plotly-div', plotlyData.data, plotlyData.layout, {{
+                                responsive: true,
+                                displayModeBar: true,
+                                displaylogo: false,
+                                modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d'],
+                                toImageButtonOptions: {{
+                                    format: 'png',
+                                    filename: 'smartcityos_dashboard',
+                                    height: 800,
+                                    width: 1200,
+                                    scale: 2
+                                }}
+                            }});
+                            
+                            window.addEventListener('resize', function() {{
+                                Plotly.Plots.resize('plotly-div');
+                            }});
+                        </script>
+                    </body>
+                    </html>
+                    """
+                    
+                    temp_path = tempfile.mktemp(suffix='.html')
+                    with open(temp_path, 'w', encoding='utf-8') as f:
+                        f.write(html_content)
+                    return temp_path
+                    
+                except Exception as e:
+                    print(f"Erro ao criar HTML: {e}")
+                    return None
+            
+            # Tentar usar tkinterweb para HTML inline
+            try:
+                from tkinterweb import HtmlFrame
+                
+                # Criar frame HTML
+                html_frame = HtmlFrame(parent, messages_enabled=False)
+                html_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+                
+                # Carregar HTML
+                temp_path = create_inline_html()
+                if temp_path:
+                    html_frame.load_file(temp_path)
+                    
+            except ImportError:
+                # Fallback: criar frame com botão para abrir no navegador
+                control_frame = tk.Frame(parent, bg=self.styles.colors.get('card', '#ffffff'))
+                control_frame.pack(fill=tk.X, padx=15, pady=10)
+                
+                def open_interactive():
+                    temp_path = create_inline_html()
+                    if temp_path:
+                        webbrowser.open(f'file://{temp_path}')
+                
+                tk.Button(control_frame, 
+                        text="🌐 Abrir Dashboard Interativo",
+                        command=open_interactive,
+                        bg=self.styles.colors.get('primary', '#007bff'), 
+                        fg='white',
+                        font=('Arial', 10, 'bold'), 
+                        relief='flat',
+                        padx=20, pady=10, cursor='hand2').pack(pady=5)
+                
+                # Criar preview estático
+                img_bytes = fig.to_image(format="png", width=1000, height=800, scale=1.5)
+                img = Image.open(io.BytesIO(img_bytes))
+                img = img.resize((850, 680), Image.Resampling.LANCZOS)
+                
+                photo = ImageTk.PhotoImage(img)
+                
+                preview_frame = tk.Frame(parent, bg=self.styles.colors.get('card', '#ffffff'))
+                preview_frame.pack(fill=tk.BOTH, expand=True, padx=15, pady=5)
+                
+                tk.Label(preview_frame, text="📊 Preview do Dashboard", 
+                        bg=self.styles.colors.get('card', '#ffffff'), 
+                        fg=self.styles.colors.get('text_secondary', '#666666'),
+                        font=('Arial', 10)).pack(pady=(5, 0))
+                
+                img_label = tk.Label(preview_frame, image=photo, bg=self.styles.colors.get('card', '#ffffff'))
+                img_label.image = photo
+                img_label.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+            
+            # Armazenar figura e dados
+            self.current_figure = fig
+            self.current_data = data
+                
+        except Exception as e:
+            print(f"Erro ao criar gráficos: {e}")
+            error_frame = tk.Frame(parent, bg=self.styles.colors.get('card', '#ffffff'))
+            error_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+            
+            tk.Label(error_frame, 
+                    text="❌ Erro ao carregar gráficos\n\nVerifique os dados e tente novamente.",
+                    bg=self.styles.colors.get('card', '#ffffff'), 
+                    fg=self.styles.colors.get('text_primary', '#333333'),
+                    font=('Arial', 12), justify=tk.CENTER).pack(expand=True)
+
     def create_plotly_charts(self, parent, period):
         """Cria gráficos inline com Plotly no Tkinter"""
         try:
