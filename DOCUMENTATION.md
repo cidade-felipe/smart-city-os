@@ -51,35 +51,34 @@ SmartCityOS/
 
 <style>
   .edgeLabel {
-    font-size: 16px !important;
+    font-size: 18px !important;
     font-weight: bold !important;
-    fill: #000000 !important; /* Exemplo em vermelho para destacar */
   }
 </style>
 
 ```mermaid
 erDiagram
-    app_user ||--|| citizen : "1:1"
-    app_user ||--o{ vehicle : "1:N"
-    app_user ||--o{ sensor : "1:N"
-    app_user ||--o{ app_user_notification : "1:N"
-    app_user ||--o{ audit_log : "1:N (affected)"
-    app_user ||--o{ audit_log : "1:N (performed)"
+    %% Estilização para melhorar contraste
+    app_user ||--|| citizen : "1 : 1"
+    app_user ||--o{ vehicle : "1 : N"
+    app_user ||--o{ sensor : "1 : N"
+    app_user ||--o{ app_user_notification : "1 : N"
+    app_user ||--o{ audit_log : "1 : N"
+    
+    citizen ||--o{ vehicle : "1 : N"
+    citizen ||--o{ vehicle_citizen : "1 : N"
+    citizen ||--o{ fine : "1 : N"
 
-    citizen ||--o{ vehicle : "1:N"
-    citizen ||--o{ vehicle_citizen : "1:N"
-    citizen ||--o{ fine : "1:N"
+    vehicle ||--o{ vehicle_citizen : "1 : N"
+    vehicle ||--o{ traffic_incident : "1 : N"
 
-    vehicle ||--o{ vehicle_citizen : "1:N"
-    vehicle ||--o{ traffic_incident : "1:N"
+    sensor ||--o{ reading : "1 : N"
+    sensor ||--o{ traffic_incident : "1 : N"
 
-    sensor ||--o{ reading : "1:N"
-    sensor ||--o{ traffic_incident : "1:N"
+    traffic_incident ||--|| fine : "1 : 1"
+    fine ||--o{ fine_payment : "1 : N"
 
-    traffic_incident ||--|| fine : "1:1"
-    fine ||--o{ fine_payment : "1:N"
-
-    notification ||--o{ app_user_notification : "1:N"
+    notification ||--o{ app_user_notification : "1 : N"
 
     app_user {
         int id PK
@@ -87,61 +86,19 @@ erDiagram
     }
     citizen {
         int id PK
-        int app_user_id FK
         varchar cpf
-        numeric wallet_balance
-        numeric debt
     }
     vehicle {
         int id PK
-        int app_user_id FK
         varchar license_plate
-        int citizen_id FK
-    }
-    vehicle_citizen {
-        int id PK
-        int vehicle_id FK
-        int citizen_id FK
-    }
-    sensor {
-        int id PK
-        int app_user_id FK
-        varchar model
-    }
-    reading {
-        int id PK
-        int sensor_id FK
-        jsonb value
-    }
-    traffic_incident {
-        int id PK
-        int vehicle_id FK
-        int sensor_id FK
     }
     fine {
         int id PK
-        int traffic_incident_id FK
-        int citizen_id FK
         numeric amount
     }
-    fine_payment {
+    traffic_incident {
         int id PK
-        int fine_id FK
-        numeric amount_paid
-    }
-    notification {
-        int id PK
-        varchar type
-    }
-    app_user_notification {
-        int id PK
-        int notification_id FK
-        int app_user_id FK
-    }
-    audit_log {
-        int id PK
-        int app_user_id FK
-        int performed_by_app_user_id FK
+        timestamp occurred_at
     }
 ```
 
