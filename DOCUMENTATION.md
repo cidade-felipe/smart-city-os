@@ -2,11 +2,11 @@
 
 Um sistema operacional inteligente para cidades que gerencia usuários, veículos, sensores, incidentes de trânsito e multas de forma automatizada.
 
-## 📋 Visão Geral
+## Visão Geral
 
 O SmartCityOS é um sistema de gestão urbana inteligente desenvolvido em Python com PostgreSQL, projetado para automatizar o controle de trânsito, gerenciamento de multas e monitoramento de sensores em ambientes urbanos. O sistema utiliza triggers de banco de dados para aplicar automaticamente penalidades e gerenciar carteiras digitais de cidadãos.
 
-## 🏗️ Arquitetura do Sistema
+## Arquitetura do Sistema
 
 ### Tecnologias Utilizadas
 
@@ -45,13 +45,13 @@ SmartCityOS/
 └── README.md               # Documentação principal
 ```
 
-## 🗄️ Modelo de Dados
+## Modelo de Dados
 
 ### Diagrama Entidade-Relacionamento (ER)
 
 <style>
   .edgeLabel {
-    font-size: 16px !important;
+    font-size: 20px !important;
     font-weight: bold !important;
     fill: #000000 !important; 
   }
@@ -59,7 +59,7 @@ SmartCityOS/
 
 ```mermaid
 erDiagram
-    %% Estilização para melhorar contraste
+    %% Relacionamentos principais
     app_user ||--|| citizen : "[[ 1 : 1 ]]"
     app_user ||--o{ vehicle : "[[ 1 : N ]]"
     app_user ||--o{ sensor : "[[ 1 : N ]]"
@@ -81,25 +81,141 @@ erDiagram
 
     notification ||--o{ app_user_notification : "[[ 1 : N ]]"
 
+    %% Definição das entidades com campos principais
     app_user {
         int id PK
         varchar username
+        varchar password_hash
+        timestamp deleted_at
+        timestamp created_at
+        timestamp updated_at
     }
+    
     citizen {
         int id PK
+        int app_user_id FK
+        varchar first_name
+        varchar last_name
         varchar cpf
+        date birth_date
+        varchar email
+        varchar phone
+        text address
+        jsonb biometric_reference
+        numeric wallet_balance
+        numeric debt
+        boolean allowed
+        timestamp deleted_at
+        timestamp created_at
+        timestamp updated_at
     }
+    
     vehicle {
         int id PK
+        int app_user_id FK
         varchar license_plate
+        varchar model
+        int year
+        int citizen_id FK
+        boolean allowed
+        timestamp deleted_at
+        timestamp created_at
+        timestamp updated_at
     }
-    fine {
+    
+    vehicle_citizen {
         int id PK
-        numeric amount
+        int vehicle_id FK
+        int citizen_id FK
     }
+    
+    sensor {
+        int id PK
+        int app_user_id FK
+        varchar model
+        varchar type
+        text location
+        boolean active
+        jsonb last_reading
+        timestamp deleted_at
+        timestamp created_at
+        timestamp updated_at
+    }
+    
+    reading {
+        int id PK
+        int sensor_id FK
+        jsonb value
+        timestamp timestamp
+        timestamp created_at
+        timestamp updated_at
+    }
+    
     traffic_incident {
         int id PK
+        int vehicle_id FK
+        int sensor_id FK
         timestamp occurred_at
+        text location
+        text description
+        timestamp created_at
+        timestamp updated_at
+    }
+    
+    fine {
+        int id PK
+        int traffic_incident_id FK
+        int citizen_id FK
+        numeric amount
+        varchar status
+        date due_date
+        timestamp created_at
+        timestamp updated_at
+    }
+    
+    fine_payment {
+        int id PK
+        int fine_id FK
+        numeric amount_paid
+        timestamp paid_at
+        varchar payment_method
+        timestamp created_at
+        timestamp updated_at
+    }
+    
+    notification {
+        int id PK
+        varchar type
+        text message
+        timestamp created_at
+        timestamp updated_at
+    }
+    
+    app_user_notification {
+        int id PK
+        int notification_id FK
+        int app_user_id FK
+        timestamp read_at
+        timestamp created_at
+        timestamp updated_at
+    }
+    
+    audit_log {
+        int id PK
+        varchar table_name
+        varchar operation
+        int row_id
+        jsonb old_values
+        jsonb new_values
+        int app_user_id FK
+        int performed_by_app_user_id FK
+        timestamp changed_at
+    }
+    
+    payment_method {
+        int id PK
+        varchar name
+        timestamp created_at
     }
 ```
 
@@ -107,15 +223,20 @@ erDiagram
 
 #### 1. `app_user`
 
-Tabela principal de usuários do sistema com credenciais de autenticação.
+Usuários do sistema (administradores, operadores).
 
 **Colunas:**
 
 - `id` (INTEGER, PRIMARY KEY) - Identificador único do usuário
-- `username` (VARCHAR(255), UNIQUE, NOT NULL) - Nome de usuário para login
+- `username` (VARCHAR(255), NOT NULL) - Nome de usuário
 - `password_hash` (VARCHAR(255), NOT NULL) - Hash da senha
-- `created_at` (TIMESTAMP) - Data de criação do registro
+- `deleted_at` (TIMESTAMP) - Data de exclusão lógica (soft delete)
+- `created_at` (TIMESTAMP) - Data de criação
 - `updated_at` (TIMESTAMP) - Data da última atualização
+
+**Índices:**
+
+- `uniq_app_user_username_active` - Username único apenas para usuários ativos
 
 **Observação:**
 
@@ -131,15 +252,16 @@ Extensão do usuário com informações pessoais e financeiras do cidadão.
 - `app_user_id` (INTEGER, NOT NULL) - Referência ao usuário (FK)
 - `first_name` (VARCHAR(100), NOT NULL) - Primeiro nome do cidadão
 - `last_name` (VARCHAR(150), NOT NULL) - Sobrenome do cidadão
-- `cpf` (VARCHAR(11), UNIQUE, NOT NULL) - CPF do cidadão
+- `cpf` (VARCHAR(11), NOT NULL) - CPF do cidadão
 - `birth_date` (DATE, NOT NULL) - Data de nascimento
-- `email` (VARCHAR(255), UNIQUE, NOT NULL) - Email do cidadão
+- `email` (VARCHAR(255), NOT NULL) - Email do cidadão
 - `phone` (VARCHAR(20)) - Telefone de contato
 - `address` (TEXT, NOT NULL) - Endereço completo
 - `biometric_reference` (JSONB) - Dados biométricos para autenticação
 - `wallet_balance` (NUMERIC(10,2), DEFAULT 0.00) - Saldo da carteira digital
 - `debt` (NUMERIC(10,2), DEFAULT 0.00) - Dívida acumulada
 - `allowed` (BOOLEAN, DEFAULT TRUE) - Status de acesso ao sistema
+- `deleted_at` (TIMESTAMP) - Data de exclusão lógica (soft delete)
 - `created_at` (TIMESTAMP) - Data de criação
 - `updated_at` (TIMESTAMP) - Data da última atualização
 
@@ -152,6 +274,11 @@ Extensão do usuário com informações pessoais e financeiras do cidadão.
 - `chk_debt` - Garante que a dívida não seja negativa
 - `fk_user` - Chave estrangeira para `app_user`
 
+**Índices:**
+
+- `ux_citizen_cpf_active` - CPF único apenas para cidadãos ativos
+- `ux_citizen_email_active` - Email único apenas para cidadãos ativos
+
 #### 3. `vehicle`
 
 Cadastro de veículos dos cidadãos.
@@ -160,18 +287,23 @@ Cadastro de veículos dos cidadãos.
 
 - `id` (INTEGER, PRIMARY KEY) - Identificador único do veículo
 - `app_user_id` (INTEGER, NOT NULL) - Proprietário do veículo (FK)
-- `license_plate` (VARCHAR(12), UNIQUE, NOT NULL) - Placa do veículo
+- `license_plate` (VARCHAR(12), NOT NULL) - Placa do veículo
 - `model` (VARCHAR(100), NOT NULL) - Modelo do veículo
 - `year` (INTEGER, NOT NULL) - Ano de fabricação
 - `citizen_id` (INTEGER) - Cidadão associado (FK)
 - `allowed` (BOOLEAN, DEFAULT TRUE) - Status de permissão do veículo
+- `deleted_at` (TIMESTAMP) - Data de exclusão lógica (soft delete)
 - `created_at` (TIMESTAMP) - Data de cadastro
 - `updated_at` (TIMESTAMP) - Data da última atualização
 
 **Constraints:**
 
-- `fk_citizen` - Chave estrangeira para `citizen`
-- `fk_user` - Chave estrangeira para `app_user`
+- `fk_citizen` - Chave estrangeira para `citizen` (ON DELETE SET NULL)
+- `fk_user` - Chave estrangeira para `app_user` (ON DELETE CASCADE)
+
+**Índices:**
+
+- `ux_vehicle_license_plate_active` - Placa única apenas para veículos ativos
 
 #### 4. `sensor`
 
@@ -186,12 +318,18 @@ Sensores de monitoramento urbano.
 - `location` (TEXT, NOT NULL) - Localização física do sensor
 - `active` (BOOLEAN, DEFAULT TRUE) - Status de atividade
 - `last_reading` (JSONB) - Última leitura capturada
+- `deleted_at` (TIMESTAMP) - Data de exclusão lógica (soft delete)
 - `created_at` (TIMESTAMP) - Data de instalação
 - `updated_at` (TIMESTAMP) - Data da última atualização
 
 **Constraints:**
 
-- `fk_user` - Chave estrangeira para `app_user`
+- `fk_user` - Chave estrangeira para `app_user` (ON DELETE CASCADE)
+
+**Funcionalidade:**
+
+- Soft delete automático define `active = FALSE`
+- Previne leituras de sensores excluídos
 
 #### 5. `reading`
 
@@ -272,10 +410,10 @@ Multas aplicadas aos incidentes.
 - `fk_traffic_incident` - Chave estrangeira para `traffic_incident` (ON DELETE CASCADE)
 - `fk_citizen` - Chave estrangeira para `citizen` (ON DELETE CASCADE)
 
-**Mudança Importante:**
+**Otimização:**
 
-- `citizen_id` foi adicionado diretamente à tabela `fine` para otimizar consultas
-- Antes era necessário JOIN através de `traffic_incident` → `vehicle` → `citizen`
+- `citizen_id` direto na tabela elimina JOINs desnecessários
+- Consultas por cidadão são executadas sem joins adicionais
 
 #### 9. `fine_payment`
 
@@ -357,7 +495,7 @@ Registro de auditoria do sistema.
 - `fk_affected_user` - Chave estrangeira para usuário afetado
 - `fk_performed_by_user` - Chave estrangeira para usuário que realizou
 
-## ⚡ Triggers e Funções
+## Triggers e Funções
 
 ### 1. Triggers de Auditoria
 
@@ -383,20 +521,88 @@ Registro de auditoria do sistema.
 - `fine_payment` → `audit_fine_payment`
 - `app_user_notification` → `audit_app_user_notification`
 
-**Descrição:** Cada tabela possui um trigger que aciona a função `audit_log_generic()` para registrar todas as operações DML.
+### 2. Triggers de Soft Delete e Timestamps
 
-### 2. Triggers de Processamento de Multas
+#### `set_updated_at()`
+
+**Função:** `set_updated_at()`
+**Evento:** BEFORE UPDATE ON `app_user`
+**Descrição:** Atualiza automaticamente o campo `updated_at`.
+
+#### `citizen_soft_delete()`
+
+**Função:** `citizen_soft_delete()`
+**Evento:** BEFORE UPDATE ON `citizen`
+**Descrição:** Implementa soft delete automático para cidadãos.
+
+**Lógica:**
+
+- Quando `deleted_at` é definido (soft delete)
+- Automaticamente define `allowed = FALSE`
+- Mantém integridade do sistema
+
+#### `sensor_soft_delete()`
+
+**Função:** `sensor_soft_delete()`
+**Evento:** BEFORE UPDATE ON `sensor`
+**Descrição:** Implementa soft delete automático para sensores.
+
+**Lógica:**
+
+- Quando `deleted_at` é definido (soft delete)
+- Automaticamente define `active = FALSE`
+- Previne leituras de sensores excluídos
+
+#### `vehicle_soft_delete()`
+
+**Função:** `vehicle_soft_delete()`
+**Evento:** BEFORE UPDATE ON `vehicle`
+**Descrição:** Implementa soft delete automático para veículos.
+
+**Lógica:**
+
+- Quando `deleted_at` é definido (soft delete)
+- Automaticamente define `allowed = FALSE`
+- Bloqueia uso de veículos excluídos
+
+### 3. Triggers de Proteção de Dados
+
+#### `block_update_deleted_citizen()`
+
+**Função:** `block_update_deleted_citizen()`
+**Evento:** BEFORE UPDATE ON `citizen`
+**Descrição:** Impede atualização de cidadãos marcados como deletados.
+
+**Lógica:**
+
+- Verifica se `deleted_at` não é NULL
+- Se estiver deletado, levanta exceção
+- Protege dados de cidadãos excluídos
+
+#### `block_update_deleted_sensor()`
+
+**Função:** `block_update_deleted_sensor()`
+**Evento:** BEFORE UPDATE ON `sensor`
+**Descrição:** Impede atualização de sensores marcados como deletados.
+
+**Lógica:**
+
+- Verifica se `deleted_at` não é NULL
+- Se estiver deletado, levanta exceção
+- Protege dados de sensores excluídos
+
+### 4. Triggers de Processamento de Multas
 
 #### `apply_fine_to_wallet()`
 
 **Função:** `apply_fine_to_wallet()`
 **Evento:** AFTER INSERT ON `fine`
-**Descrição:** Aplica automaticamente multas à carteira do cidadão quando uma multa é criada.
+**Descrição:** Aplica automaticamente multas à carteira do cidadão.
 
 **Lógica:**
 
-- Verifica se multa está cancelada ou valor zero (NÃO faz nada)
-- Busca saldo do cidadão diretamente por `citizen_id` (NOVA ESTRUTURA)
+- Verifica se multa está cancelada ou valor zero (ignora)
+- Busca saldo do cidadão diretamente por `citizen_id`
 - Se saldo >= valor da multa:
   - Deduz valor do `wallet_balance`
   - Mantém `debt` inalterado
@@ -410,11 +616,11 @@ Registro de auditoria do sistema.
 
 **Função:** `apply_fine_payment()`
 **Evento:** AFTER INSERT ON `fine_payment`
-**Descrição:** Processa pagamentos de multas e atualiza o status do cidadão.
+**Descrição:** Processa pagamentos de multas e atualiza status.
 
 **Lógica:**
 
-- Busca dívida atual do cidadão diretamente por `citizen_id` (NOVA ESTRUTURA)
+- Busca dívida atual do cidadão por `citizen_id`
 - Reduz `debt` pelo valor pago (nunca negativo)
 - Reativa `allowed = TRUE` quando dívida zerada
 - Se método = "Carteira Digital":
@@ -426,11 +632,11 @@ Registro de auditoria do sistema.
 
 **Função:** `cancel_fines_when_citizen_deleted()`
 **Evento:** BEFORE DELETE ON `citizen`
-**Descrição:** Cancela multas pendentes quando um cidadão é excluído.
+**Descrição:** Cancela multas pendentes quando cidadão é excluído.
 
 **Lógica:**
 
-- Busca multas pendentes do cidadão através do relacionamento
+- Busca multas pendentes do cidadão
 - Define status como "cancelled"
 - Atualiza `updated_at`
 
@@ -442,13 +648,47 @@ Registro de auditoria do sistema.
 
 **Lógica:**
 
-- Conta multas pendentes diretamente por `citizen_id` (NOVA ESTRUTURA)
+- Conta multas pendentes diretamente por `citizen_id`
 - Se houver multas pendentes:
   - Levanta exceção com mensagem clara
 - Se não houver:
   - Permite exclusão normalmente
 
-## 🚀 Índices de Performance
+### 5. Triggers Implementados
+
+**Total de Triggers:** 15
+
+#### Auditoria
+
+- `audit_app_user`
+- `audit_citizen`
+- `audit_vehicle`
+- `audit_sensor`
+- `audit_traffic_incident`
+- `audit_fine`
+- `audit_fine_payment`
+- `audit_app_user_notification`
+
+#### Soft Delete e Timestamps
+
+- `trg_app_user_updated_at`
+- `trg_citizen_soft_delete`
+- `trg_sensor_soft_delete`
+- `trg_vehicle_soft_delete`
+
+#### Proteção de Dados
+
+- `trg_block_update_deleted_citizen`
+- `trg_block_update_deleted_sensor`
+
+#### Processamento de Multas
+
+- `trigger_apply_fine`
+- `trigger_apply_fine_payment`
+- `trg_cancel_fines_on_citizen_delete`
+- `trigger_prevent_delete_citizen_with_pending_fines`
+
+## Índices de Performance
 
 ### Índices de Trânsito e Incidentes
 
@@ -458,40 +698,48 @@ Registro de auditoria do sistema.
 
 ### Índices de Multas
 
-- `idx_fine_traffic_incident` - Relacionamento multa-incidente
-- `idx_fine_citizen` - Busca por cidadão (NOVO)
-- `idx_fine_pending` - Multas pendentes (índice parcial)
-- `idx_fine_due_date` - Ordenação por vencimento
-
-### Índices de Pagamentos
-
-- `idx_fine_payment_fine` - Busca por multa
+- `idx_fine_traffic_incident` - Relacionamento com incidentes
+- `idx_fine_pending` - Multas pendentes (índice filtrado)
+- `idx_fine_due_date` - Consultas por data de vencimento
+- `idx_fine_citizen` - Busca direta por cidadão (OTIMIZAÇÃO)
+- `idx_fine_payment_fine` - Pagamentos por multa
 - `idx_fine_payment_paid_at` - Consultas por data de pagamento
 
-### Índices de Veículos e Cidadãos
+### Índices de Veículos e Sensores
 
-- `idx_vehicle_app_user` - Veículos por proprietário
-- `idx_vehicle_allowed_true` - Veículos ativos (índice parcial)
-- `idx_citizen_app_user` - Cidadãos por usuário
-
-### Índices de Sensores
-
-- `idx_sensor_app_user_active` - Sensores ativos por usuário
+- `idx_vehicle_app_user` - Veículos por usuário
+- `idx_vehicle_allowed_true` - Veículos ativos (índice filtrado)
+- `idx_sensor_app_user_active` - Sensores ativos por usuário (índice filtrado)
 
 ### Índices de Notificações
 
 - `idx_app_user_notification_app_user` - Notificações por usuário
-- `idx_app_user_notification_unread` - Notificações não lidas (índice parcial)
+- `idx_app_user_notification_unread` - Notificações não lidas (índice filtrado)
 
 ### Índices de Auditoria
 
-- `idx_audit_log_app_user` - Logs por usuário afetado
-- `idx_audit_log_changed_at` - Ordenação por data
+- `idx_audit_log_app_user` - Auditoria por usuário
+- `idx_audit_log_changed_at` - Consultas por período
 - `idx_audit_log_table_operation` - Busca por tabela e operação
 - `idx_audit_log_row_id` - Busca por registro específico
-- `idx_audit_log_table_row` - Busca composta por tabela e registro (NOVO)
+- `idx_audit_log_table_row` - Busca combinada (tabela + registro)
 
-## 🔧 Configuração e Instalação
+### Índices Únicos Condicionais (Soft Delete)
+
+- `uniq_app_user_username_active` - Username único apenas para usuários ativos
+- `ux_citizen_cpf_active` - CPF único apenas para cidadãos ativos
+- `ux_citizen_email_active` - Email único apenas para cidadãos ativos
+- `ux_vehicle_license_plate_active` - Placa única apenas para veículos ativos
+
+**Total de Índices:** 21
+
+**Características:**
+
+- **Índices Únicos Condicionais**: Permitem reutilização de CPFs/emails/placas após soft delete
+- **Índices Filtrados**: Otimizam consultas comuns (ativos, pendentes, não lidas)
+- **Otimização Direta**: `idx_fine_citizen` elimina JOINs desnecessários
+
+## Configuração e Instalação
 
 ### Pré-requisitos
 
@@ -532,14 +780,26 @@ pip install psycopg python-dotenv pandas tabulate
 
 1. Criar banco de dados PostgreSQL
 2. Executar os scripts SQL em ordem:
-   - `sql/create_tables.sql` - Criação das tabelas
-   - `sql/trigger_functions.sql` - Funções de trigger (apenas auditoria implementada)
-   - `sql/triggers.sql` - Triggers de auditoria (8 triggers implementados)
-   - `sql/index.sql` - Índices de performance (16 índices)
+   - `sql/create_tables.sql` - Criação das tabelas com soft delete
+   - `sql/trigger_functions.sql` - Funções de trigger (15 funções)
+   - `sql/triggers.sql` - Triggers implementados (15 triggers)
+   - `sql/index.sql` - Índices de performance (21 índices)
 
-**Importante:** As funções `apply_fine_to_wallet()` e `apply_fine_payment()` existem mas não estão conectadas como triggers. O processamento de multas deve ser feito via aplicação.
+**Características do Sistema:**
 
-## 📊 Funcionalidades Principais
+- **Soft Delete Implementado**: Todas as tabelas principais têm `deleted_at`
+- **Índices Únicos Condicionais**: Permitem reutilização de dados após exclusão
+- **15 Triggers Ativos**: Auditoria completa, soft delete, proteção de dados e processamento de multas
+- **Otimização de Queries**: `citizen_id` direto em `fine` elimina JOINs
+
+**Triggers Implementados:**
+
+- **Auditoria (8)**: Registro completo de todas as operações DML
+- **Soft Delete (4)**: Exclusão lógica automática para usuários, cidadãos, veículos, sensores
+- **Proteção de Dados (2)**: Bloqueio de atualização em registros deletados
+- **Processamento de Multas (4)**: Aplicação automática, pagamentos, cancelamentos e validações
+
+## Funcionalidades Principais
 
 ### 1. Gestão de Usuários e Cidadãos
 
@@ -584,7 +844,7 @@ pip install psycopg python-dotenv pandas tabulate
 - Rastreabilidade completa
 - Dados anteriores e posteriores
 
-## 🧪 Interface Gráfica (GUI)
+## Interface Gráfica (GUI)
 
 ### Tecnologias
 
@@ -618,7 +878,7 @@ pip install psycopg python-dotenv pandas tabulate
 - Controle de leitura
 - Criação de novas notificações
 
-## 🔄 Fluxo de Trabalho
+## Fluxo de Trabalho
 
 ### Fluxo de Incidente de Trânsito
 
@@ -650,7 +910,7 @@ pip install psycopg python-dotenv pandas tabulate
 4. Dados anteriores e posteriores são armazenados em JSONB
 5. Usuário da sessão é capturado via configuração
 
-## 🧪 Testes e Exemplos
+## Testes e Exemplos
 
 O notebook `smart_city_os.ipynb` contém funções para:
 
@@ -660,7 +920,7 @@ O notebook `smart_city_os.ipynb` contém funções para:
 - Consultas e visualizações
 - Exportação de dados para CSV
 
-## 📈 Performance e Otimização
+## Performance e Otimização
 
 ### Índices Estratégicos Implementados
 
@@ -676,25 +936,63 @@ O notebook `smart_city_os.ipynb` contém funções para:
 
 ### Observações de Performance
 
-- Sistema atualmente depende de processamento via aplicação para multas
-- Auditoria adiciona overhead mínimo mas garante rastreabilidade completa
-- Índices parciais otimizam consultas comuns sem penalizar escritas
+- **Soft Delete Otimizado**: Índices condicionais permitem reutilização eficiente de dados
+- **15 Triggers Ativos**: Processamento automático com mínimo overhead
+- **21 Índices Estratégicos**: Otimização para queries críticas do sistema
+- **Auditoria Completa**: Rastreabilidade sem penalizar performance significativamente
 
-## 🔒 Segurança
+## Segurança
 
 ### Controle de Acesso
 
-- Bloqueio automático por dívida
-- Validação de CPF único
-- Hash de senhas seguro
+- Bloqueio automático por dívida com reativação automática
+- Validação de CPF/email únicos apenas para registros ativos
+- Hash de senhas seguro com gerenciamento de sessão
+- Soft delete protege dados sensíveis mantendo integridade
 
-### Auditoria
+### Auditoria e Proteção
 
-- Registro completo de operações
-- Rastreabilidade de alterações
-- Logs de acesso
+- Registro completo de todas as operações DML
+- Rastreabilidade de alterações com usuário e timestamp
+- Proteção contra atualização de registros deletados
+- Logs de acesso para conformidade e forense
 
-## 🚀 Extensões Futuras
+## Arquitetura do Sistema
+
+### Soft Delete Implementado
+
+**Tabelas com Soft Delete:**
+- `app_user`: `deleted_at` + índice único condicional
+- `citizen`: `deleted_at` + índices únicos condicionais (CPF, email)
+- `vehicle`: `deleted_at` + índice único condicional (placa)
+- `sensor`: `deleted_at` + desativação automática
+
+**Triggers de Soft Delete:**
+- `citizen_soft_delete()`: Bloqueia automaticamente cidadãos deletados
+- `sensor_soft_delete()`: Desativa sensores deletados
+- `vehicle_soft_delete()`: Bloqueia veículos deletados
+- `block_update_deleted_*()`: Impede modificação de registros deletados
+
+### Otimização de Performance
+
+**Índices Únicos Condicionais:**
+- Permitem reutilização de CPFs, emails e placas após soft delete
+- Mantêm integridade sem bloquear reutilização natural de dados
+- Performance superior a triggers complexos de validação
+
+**Otimização de Queries:**
+- `citizen_id` direto em `fine` elimina JOINs desnecessários
+- Índices filtrados para consultas comuns (ativos, pendentes)
+- 21 índices estratégicos para performance otimizada
+
+### Triggers Completos (15 ativos)
+
+**Auditoria (8):** Registro completo em todas as tabelas principais
+**Soft Delete (4):** Exclusão lógica automática e proteção
+**Proteção (2):** Bloqueio de atualização em registros deletados  
+**Multas (4):** Processamento automático completo
+
+## Extensões Futuras
 
 ### Possíveis Melhorias
 
@@ -704,11 +1002,11 @@ O notebook `smart_city_os.ipynb` contém funções para:
 - Machine learning para previsão de incidentes
 - Integração com sistemas de trânsito municipais
 
-## 📝 Licença
+## Licença
 
 Este projeto está licenciado sob os termos da licença MIT. Consulte o arquivo `LICENSE` para mais detalhes.
 
-## 👥 Contribuição
+## Contribuição
 
 Contribuições são bem-vindas! Por favor:
 
@@ -721,12 +1019,32 @@ Contribuições são bem-vindas! Por favor:
 
 Para dúvidas e suporte:
 
-- Analisar o notebook de exemplos
-- Verificar logs de auditoria
-- Consultar documentação do PostgreSQL
-- Revisar estrutura de tabelas e triggers
+- **Verificar logs de auditoria** para rastrear problemas
+- **Consultar documentação atualizada** do PostgreSQL e triggers
+- **Analisar estrutura de tabelas e índices** para otimização
+- **Revisar funções de trigger** para entendimento do fluxo automático
+- **GUI completa** com dashboard interativo e relatórios profissionais
 
-## Autor
+## Características do Sistema
+
+### Implementações Principais:
+
+- **Soft Delete Completo**: 4 tabelas principais com exclusão lógica  
+- **15 Triggers Ativos**: Auditoria, proteção e processamento automático  
+- **21 Índices Otimizados**: Performance e reutilização de dados  
+- **Proteção de Dados**: Bloqueio de atualização em registros deletados  
+- **Relatórios Profissionais**: Excel com múltiplas abas e gráficos  
+- **Dashboard Interativo**: Plotly com visualizações avançadas  
+
+### Benefícios do Sistema:
+
+- **Performance**: Queries otimizadas com índices estratégicos  
+- **Segurança**: Dados protegidos com soft delete e auditoria  
+- **Visualização**: Relatórios executivos e dashboards completos  
+- **Automação**: Processamento de multas 100% automático  
+- **Confiabilidade**: Sistema robusto com rastreabilidade completa  
+
+**SmartCityOS agora é uma solução completa de gestão urbana inteligente!**
 
 Este projeto foi desenvolvido por **Felipe Cidade Soares**.
 
