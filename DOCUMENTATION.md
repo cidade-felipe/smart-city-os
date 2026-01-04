@@ -49,6 +49,14 @@ SmartCityOS/
 
 ### Diagrama Entidade-Relacionamento (ER)
 
+<style>
+  .edgeLabel {
+    font-size: 16px !important;
+    font-weight: bold !important;
+    fill: #000000 !important; /* Exemplo em vermelho para destacar */
+  }
+</style>
+
 ```mermaid
 erDiagram
     app_user ||--|| citizen : "1:1"
