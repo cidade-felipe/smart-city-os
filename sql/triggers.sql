@@ -56,20 +56,11 @@ CREATE TRIGGER trg_sensor_soft_delete
 BEFORE UPDATE ON sensor
 FOR EACH ROW
 EXECUTE FUNCTION sensor_soft_delete();
-CREATE TRIGGER trg_vehicle_soft_delete
-BEFORE UPDATE ON vehicle
-FOR EACH ROW
-EXECUTE FUNCTION vehicle_soft_delete();
 
 CREATE TRIGGER trg_block_update_deleted_citizen
 BEFORE UPDATE ON citizen
 FOR EACH ROW
 EXECUTE FUNCTION block_update_deleted_citizen();
-
-CREATE TRIGGER trg_block_update_deleted_sensor
-BEFORE UPDATE ON sensor
-FOR EACH ROW
-EXECUTE FUNCTION block_update_deleted_sensor();
 
 CREATE TRIGGER trg_block_update_deleted_sensor
 BEFORE UPDATE ON sensor
