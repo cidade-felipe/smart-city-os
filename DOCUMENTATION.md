@@ -280,7 +280,7 @@ Multas aplicadas aos incidentes.
 #### 9. `fine_payment`
 
 Pagamentos de multas realizados.
-
+  
 - `id` (INTEGER, PRIMARY KEY) - Identificador único do pagamento
 - `fine_id` (INTEGER, NOT NULL) - Multa paga (FK)
 - `amount_paid` (NUMERIC(10,2), NOT NULL) - Valor pago
