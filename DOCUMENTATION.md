@@ -47,13 +47,18 @@ SmartCityOS/
 
 ## Modelo de Dados
 
+Neste documento, descrevemos o modelo de dados do SmartCityOS, que é composto por 13 tabelas principais.
+
 ### Diagrama Entidade-Relacionamento (ER)
 
+Abaixo está o diagrama ER do SmartCityOS.
+
 <style>
+
   .edgeLabel {
     font-size: 20px !important;
     font-weight: bold !important;
-    fill: #000000 !important; 
+    fill: #000000 !important;
   }
 </style>
 
@@ -855,11 +860,13 @@ pip install psycopg python-dotenv pandas tabulate
 ### Funcionalidades da GUI
 
 #### Dashboard
+
 - Cards com estatísticas em tempo real
 - Gráficos de visualização
 - Indicadores de performance
 
 #### Gestão de Entidades
+
 - **Cidadãos**: CRUD completo com filtros
 - **Veículos**: CRUD com validação de placa
 - **Sensores**: Gestão com status ativo/inativo
@@ -867,6 +874,7 @@ pip install psycopg python-dotenv pandas tabulate
 - **Multas**: Geração e pagamento com integração automática
 
 #### Console SQL Seguro
+
 - Editor com syntax highlighting
 - Execução segura (SELECT apenas)
 - Rollback automático em erros
@@ -874,6 +882,7 @@ pip install psycopg python-dotenv pandas tabulate
 - Validação de comandos perigosos
 
 #### Sistema de Notificações
+
 - Lista de notificações por usuário
 - Controle de leitura
 - Criação de novas notificações
@@ -959,15 +968,19 @@ O notebook `smart_city_os.ipynb` contém funções para:
 
 ## Arquitetura do Sistema
 
+Nesta seção, descrevemos a arquitetura do sistema, incluindo as extensões e funcionalidades implementadas.
+
 ### Soft Delete Implementado
 
 **Tabelas com Soft Delete:**
+
 - `app_user`: `deleted_at` + índice único condicional
 - `citizen`: `deleted_at` + índices únicos condicionais (CPF, email)
 - `vehicle`: `deleted_at` + índice único condicional (placa)
 - `sensor`: `deleted_at` + desativação automática
 
 **Triggers de Soft Delete:**
+
 - `citizen_soft_delete()`: Bloqueia automaticamente cidadãos deletados
 - `sensor_soft_delete()`: Desativa sensores deletados
 - `vehicle_soft_delete()`: Bloqueia veículos deletados
@@ -976,11 +989,13 @@ O notebook `smart_city_os.ipynb` contém funções para:
 ### Otimização de Performance
 
 **Índices Únicos Condicionais:**
+
 - Permitem reutilização de CPFs, emails e placas após soft delete
 - Mantêm integridade sem bloquear reutilização natural de dados
 - Performance superior a triggers complexos de validação
 
 **Otimização de Queries:**
+
 - `citizen_id` direto em `fine` elimina JOINs desnecessários
 - Índices filtrados para consultas comuns (ativos, pendentes)
 - 21 índices estratégicos para performance otimizada
@@ -1006,15 +1021,6 @@ O notebook `smart_city_os.ipynb` contém funções para:
 
 Este projeto está licenciado sob os termos da licença MIT. Consulte o arquivo `LICENSE` para mais detalhes.
 
-## Contribuição
-
-Contribuições são bem-vindas! Por favor:
-
-1. Fork do projeto
-2. Criar branch para feature
-3. Submeter pull request
-4. Manter padrão de código e documentação
-
 ## Suporte
 
 Para dúvidas e suporte:
@@ -1027,7 +1033,7 @@ Para dúvidas e suporte:
 
 ## Características do Sistema
 
-### Implementações Principais:
+### Implementações Principais
 
 - **Soft Delete Completo**: 4 tabelas principais com exclusão lógica  
 - **15 Triggers Ativos**: Auditoria, proteção e processamento automático  
@@ -1036,7 +1042,7 @@ Para dúvidas e suporte:
 - **Relatórios Profissionais**: Excel com múltiplas abas e gráficos  
 - **Dashboard Interativo**: Plotly com visualizações avançadas  
 
-### Benefícios do Sistema:
+### Benefícios do Sistema
 
 - **Performance**: Queries otimizadas com índices estratégicos  
 - **Segurança**: Dados protegidos com soft delete e auditoria  
