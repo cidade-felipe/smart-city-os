@@ -63,15 +63,6 @@ Neste documento, descrevemos o modelo de dados do SmartCityOS, que é composto p
 
 Abaixo está o diagrama ER do SmartCityOS.
 
-<style>
-
-  .edgeLabel {
-    font-size: 20px !important;
-    font-weight: bold !important;
-    fill: #000000 !important;
-  }
-</style>
-
 ```mermaid
 erDiagram
     %% Relacionamentos principais
