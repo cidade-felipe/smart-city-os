@@ -5567,15 +5567,16 @@ class SmartCityOSGUI:
                                    font=self.styles.fonts['heading'], relief='solid', bd=1)
         info_frame.pack(fill=tk.X, pady=(0, 10))
         
-        info_text = f"""Versão: SmartCityOS v1.0.0
+        info_text = f"""
+Versão: SmartCityOS v1.0.0
 Python: {sys.version.split()[0]}
 PostgreSQL: 18.0
-Última atualização: {datetime.now().strftime('%d/%m/%Y %H:%M')}"""
+Último acesso: {datetime.now().strftime('%d/%m/%Y %H:%M')}"""
         
         info_label = tk.Label(info_frame, text=info_text, bg=self.styles.colors['card'], 
                              fg=self.styles.colors['text_secondary'], font=self.styles.fonts['small'],
-                             justify=tk.LEFT)
-        info_label.pack(padx=10, pady=8)
+                             justify=tk.LEFT, height=5)
+        info_label.pack(padx=10, pady=(0, 10))
     
     def load_settings(self):
         """Carrega as configurações salvas do arquivo settings.json"""
