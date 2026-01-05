@@ -14,7 +14,7 @@ O SmartCityOS é um sistema de gestão urbana inteligente desenvolvido em Python
 
 ## 🗄️ Modelo de Dados
 
-### Tabelas Principais (13)
+### Tabelas Principais (12)
 
 - **app_user**: Usuários do sistema com autenticação
 - **citizen**: Extensão com carteira digital e controle biométrico
@@ -25,7 +25,6 @@ O SmartCityOS é um sistema de gestão urbana inteligente desenvolvido em Python
 - **fine**: Multas aplicadas aos incidentes
 - **fine_payment**: Pagamentos de multas realizados
 - **notification**: Sistema de notificações
-- **payment_method**: Métodos de pagamento disponíveis
 - **app_user_notification**: Relacionamento usuários-notificações
 - **vehicle_citizen**: Relacionamento veículos-cidadãos
 - **audit_log**: Registro completo de auditoria
