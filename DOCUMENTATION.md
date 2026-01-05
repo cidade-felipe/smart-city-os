@@ -6,6 +6,14 @@ Um sistema operacional inteligente para cidades que gerencia usuários, veículo
 
 O SmartCityOS é um sistema de gestão urbana inteligente desenvolvido em Python com PostgreSQL, projetado para automatizar o controle de trânsito, gerenciamento de multas e monitoramento de sensores em ambientes urbanos. O sistema utiliza triggers de banco de dados para aplicar automaticamente penalidades e gerenciar carteiras digitais de cidadãos.
 
+### 🚀 Funcionalidades Principais
+
+- **Soft Delete**: Sistema de exclusão suave que mantém dados históricos
+- **Reuso de Username**: Permite reutilizar usernames de usuários deletados
+- **Gestão de Entidades**: Cidadãos, Veículos, Sensores com soft delete em cascata
+- **Views Ativas**: Views automáticas que filtram apenas dados não deletados
+- **Validação de Username**: Verificação em tempo real de disponibilidade de usernames
+
 ## Arquitetura do Sistema
 
 ### Tecnologias Utilizadas
@@ -30,13 +38,15 @@ SmartCityOS/
 │   ├── create_tables.py    # Criação de tabelas
 │   ├── create_triggers.py  # Criação de triggers
 │   ├── create_indexes.py   # Criação de índices
+│   ├── create_views.py     # Criação de views
 │   ├── drop_tables.py      # Remoção de tabelas
 │   └── inserts.py          # Inserção de dados genéricos
 ├── sql/                    # Scripts SQL do banco de dados
 │   ├── create_tables.sql   # Criação das tabelas
 │   ├── trigger_functions.sql # Funções de trigger
 │   ├── triggers.sql        # Definição dos triggers
-│   └── index.sql           # Índices de performance
+│   ├── index.sql           # Índices de performance
+│   └── wiews.sql           # Views de dados ativos
 ├── csv/                    # Exportação de dados
 ├── backup/                 # Backups do banco
 ├── venv/                   # Ambiente virtual
@@ -500,6 +510,141 @@ Registro de auditoria do sistema.
 - `fk_affected_user` - Chave estrangeira para usuário afetado
 - `fk_performed_by_user` - Chave estrangeira para usuário que realizou
 
+## 🗑️ Soft Delete e Reuso de Username
+
+### Visão Geral
+
+O SmartCityOS implementa um sistema de **Soft Delete** que permite a exclusão lógica de registros mantendo o histórico completo dos dados. Esta funcionalidade é essencial para:
+
+- **Preservação de dados históricos** para auditoria e análise
+- **Recuperação de informações** em caso de exclusão acidental
+- **Reuso de usernames** de usuários deletados
+- **Manutenção da integridade** de relacionamentos
+
+### Funcionalidades Implementadas
+
+#### 1. Soft Delete em Cascata
+
+Quando uma entidade principal é deletada, o sistema automaticamente:
+
+- **Cidadãos**: Soft delete do cidadão + app_user associado
+- **Veículos**: Soft delete do veículo + app_user associado  
+- **Sensores**: Soft delete do sensor + app_user associado
+- **App Users**: Soft delete individual (quando deletado diretamente)
+
+#### 2. Views de Dados Ativos
+
+O sistema mantém views automáticas que filtram apenas registros não deletados:
+
+- `citizen_active` - Apenas cidadãos ativos
+- `vehicle_active` - Apenas veículos ativos
+- `sensor_active` - Apenas sensores ativos
+- `app_user_active` - Apenas usuários ativos
+
+#### 3. Reuso de Username
+
+A validação de username considera apenas usuários ativos:
+
+```python
+def is_username_available(self, username):
+    """Verifica se username está disponível (apenas em usuários ativos)"""
+    cur.execute("SELECT id FROM app_user_active WHERE username = %s", (username,))
+    return cur.fetchone() is None
+```
+
+### Triggers Específicos
+
+#### Cidadãos
+```sql
+CREATE TRIGGER trg_soft_delete_citizen
+BEFORE DELETE ON citizen
+FOR EACH ROW
+EXECUTE FUNCTION soft_delete_citizen_with_user();
+```
+
+#### Veículos
+```sql
+CREATE TRIGGER trg_soft_delete_vehicle
+BEFORE DELETE ON vehicle
+FOR EACH ROW
+EXECUTE FUNCTION soft_delete_vehicle_with_user();
+```
+
+#### Sensores
+```sql
+CREATE TRIGGER trg_soft_delete_sensor
+BEFORE DELETE ON sensor
+FOR EACH ROW
+EXECUTE FUNCTION soft_delete_sensor_with_user();
+```
+
+### Funções de Soft Delete
+
+#### soft_delete_citizen_with_user()
+```sql
+-- Soft delete do app_user associado
+UPDATE app_user 
+SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP, allowed = FALSE 
+WHERE id = OLD.app_user_id;
+
+-- Soft delete do citizen
+UPDATE citizen 
+SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP, allowed = FALSE 
+WHERE id = OLD.id;
+```
+
+#### soft_delete_vehicle_with_user()
+```sql
+-- Soft delete do app_user associado
+UPDATE app_user 
+SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP, allowed = FALSE 
+WHERE id = OLD.app_user_id;
+
+-- Soft delete do vehicle
+UPDATE vehicle 
+SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP, allowed = FALSE 
+WHERE id = OLD.id;
+```
+
+#### soft_delete_sensor_with_user()
+```sql
+-- Soft delete do app_user associado
+UPDATE app_user 
+SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP, allowed = FALSE 
+WHERE id = OLD.app_user_id;
+
+-- Soft delete do sensor
+UPDATE sensor 
+SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP, active = FALSE 
+WHERE id = OLD.id;
+```
+
+### Fluxo de Reuso de Username
+
+1. **Criar Entidade**: Cidadão/Veículo/Sensor com username "teste123"
+2. **Deletar Entidade**: Soft delete em cascata (entidade + app_user)
+3. **Verificar Disponibilidade**: `app_user_active` não contém "teste123"
+4. **Recriar Entidade**: Novo cidadão/veículo/sensor pode usar "teste123"
+
+### Validação na GUI
+
+A validação é implementada nas funções de criação:
+
+```python
+# Em save_citizen, save_vehicle, save_sensor
+if not self.is_username_available(username):
+    messagebox.showerror("Erro", f"Username '{username}' já está em uso! Escolha outro.")
+    return
+```
+
+### Benefícios
+
+- ✅ **Integridade de Dados**: Histórico completo mantido
+- ✅ **Performance**: Views otimizadas para dados ativos
+- ✅ **Flexibilidade**: Reuso de usernames entre entidades
+- ✅ **Auditoria**: Rastro completo de operações
+- ✅ **Recuperação**: Possibilidade de restaurar dados deletados
+
 ## Triggers e Funções
 
 ### 1. Triggers de Auditoria
@@ -514,6 +659,7 @@ Registro de auditoria do sistema.
 - Registra tipo de operação (INSERT/UPDATE/DELETE)
 - Armazena valores antigos e novos em JSONB
 - Identifica usuário que realizou a operação
+- Retorna `COALESCE(NEW, OLD)` para compatibilidade com soft delete
 
 **Tabelas com auditoria:**
 
@@ -521,80 +667,69 @@ Registro de auditoria do sistema.
 - `citizen` → `audit_citizen`
 - `vehicle` → `audit_vehicle`
 - `sensor` → `audit_sensor`
-- `traffic_incident` → `audit_traffic_incident`
 - `fine` → `audit_fine`
 - `fine_payment` → `audit_fine_payment`
 - `app_user_notification` → `audit_app_user_notification`
 
-### 2. Triggers de Soft Delete e Timestamps
+### 2. Triggers de Soft Delete
 
-#### `set_updated_at()`
+#### `soft_delete_generic()`
 
-**Função:** `set_updated_at()`
-**Evento:** BEFORE UPDATE ON `app_user`
-**Descrição:** Atualiza automaticamente o campo `updated_at`.
-
-#### `citizen_soft_delete()`
-
-**Função:** `citizen_soft_delete()`
-**Evento:** BEFORE UPDATE ON `citizen`
-**Descrição:** Implementa soft delete automático para cidadãos.
+**Função:** `soft_delete_generic()`
+**Evento:** BEFORE DELETE em múltiplas tabelas
+**Descrição:** Função genérica de soft delete que funciona para qualquer tabela.
 
 **Lógica:**
 
-- Quando `deleted_at` é definido (soft delete)
-- Automaticamente define `allowed = FALSE`
-- Mantém integridade do sistema
+- Define configuração temporária `app.soft_delete = true`
+- Executa UPDATE dinâmico usando `format()` com nome da tabela
+- Define `deleted_at = CURRENT_TIMESTAMP`
+- Define `allowed = FALSE` (bloqueia automaticamente)
+- Atualiza `updated_at`
+- Limpa configuração temporária
+- Retorna `NULL` para impedir DELETE físico
 
-#### `sensor_soft_delete()`
+#### `block_update_deleted_generic()`
 
-**Função:** `sensor_soft_delete()`
-**Evento:** BEFORE UPDATE ON `sensor`
-**Descrição:** Implementa soft delete automático para sensores.
-
-**Lógica:**
-
-- Quando `deleted_at` é definido (soft delete)
-- Automaticamente define `active = FALSE`
-- Previne leituras de sensores excluídos
-
-#### `vehicle_soft_delete()`
-
-**Função:** `vehicle_soft_delete()`
-**Evento:** BEFORE UPDATE ON `vehicle`
-**Descrição:** Implementa soft delete automático para veículos.
+**Função:** `block_update_deleted_generic()`
+**Evento:** BEFORE UPDATE em múltiplas tabelas
+**Descrição:** Função genérica que impede atualização de registros deletados.
 
 **Lógica:**
 
-- Quando `deleted_at` é definido (soft delete)
-- Automaticamente define `allowed = FALSE`
-- Bloqueia uso de veículos excluídos
+- Verifica se está em processo de soft delete (`app.soft_delete = true`)
+- Se estiver, permite atualização (para o próprio soft delete)
+- Se `deleted_at` não for NULL e não for soft delete:
+  - Levanta exceção genérica com nome da tabela e ID
+- Protege integridade de dados deletados
+
+**Tabelas com soft delete genérico:**
+
+- `citizen` → `trg_soft_delete_citizen` + `trg_block_update_deleted_citizen`
+- `vehicle` → `trg_soft_delete_vehicle` + `trg_block_update_deleted_vehicle`
+- `sensor` → `trg_soft_delete_sensor` + `trg_block_update_deleted_sensor`
 
 ### 3. Triggers de Proteção de Dados
 
-#### `block_update_deleted_citizen()`
+#### `block_update_deleted_generic()`
 
-**Função:** `block_update_deleted_citizen()`
-**Evento:** BEFORE UPDATE ON `citizen`
-**Descrição:** Impede atualização de cidadãos marcados como deletados.
-
-**Lógica:**
-
-- Verifica se `deleted_at` não é NULL
-- Se estiver deletado, levanta exceção
-- Protege dados de cidadãos excluídos
-
-#### `block_update_deleted_sensor()`
-
-**Função:** `block_update_deleted_sensor()`
-**Evento:** BEFORE UPDATE ON `sensor`
-**Descrição:** Impede atualização de sensores marcados como deletados.
+**Função:** `block_update_deleted_generic()`
+**Evento:** BEFORE UPDATE em múltiplas tabelas
+**Descrição:** Função genérica que impede atualização de registros deletados.
 
 **Lógica:**
 
-- Verifica se `deleted_at` não é NULL
-- Se estiver deletado, levanta exceção
-- Protege dados de sensores excluídos
+- Verifica se está em processo de soft delete (`app.soft_delete = true`)
+- Se estiver, permite atualização (para o próprio soft delete)
+- Se `deleted_at` não for NULL e não for soft delete:
+  - Levanta exceção genérica com nome da tabela e ID
+- Protege integridade de dados deletados
+
+**Tabelas com proteção genérica:**
+
+- `citizen` → `trg_block_update_deleted_citizen`
+- `vehicle` → `trg_block_update_deleted_vehicle`
+- `sensor` → `trg_block_update_deleted_sensor`
 
 ### 4. Triggers de Processamento de Multas
 
@@ -606,8 +741,8 @@ Registro de auditoria do sistema.
 
 **Lógica:**
 
-- Verifica se multa está cancelada ou valor zero (ignora)
-- Busca saldo do cidadão diretamente por `citizen_id`
+- Ignora multas canceladas ou com valor zero
+- Busca saldo do cidadão por `citizen_id` com `FOR UPDATE`
 - Se saldo >= valor da multa:
   - Deduz valor do `wallet_balance`
   - Mantém `debt` inalterado
@@ -625,13 +760,13 @@ Registro de auditoria do sistema.
 
 **Lógica:**
 
-- Busca dívida atual do cidadão por `citizen_id`
+- Busca `citizen_id` da multa
 - Reduz `debt` pelo valor pago (nunca negativo)
 - Reativa `allowed = TRUE` quando dívida zerada
 - Se método = "Carteira Digital":
   - Também deduz do `wallet_balance`
 - Marca multa como "paid" quando totalmente quitada
-- Atualiza timestamps automaticamente
+- Usa `COALESCE(SUM(amount_paid), 0)` para total pago
 
 #### `cancel_fines_when_citizen_deleted()`
 
@@ -641,9 +776,10 @@ Registro de auditoria do sistema.
 
 **Lógica:**
 
-- Busca multas pendentes do cidadão
+- Atualiza multas diretamente por `citizen_id`
 - Define status como "cancelled"
 - Atualiza `updated_at`
+- Retorna `OLD` para permitir continuação do soft delete
 
 #### `prevent_delete_citizen_with_pending_fines()`
 
@@ -661,37 +797,81 @@ Registro de auditoria do sistema.
 
 ### 5. Triggers Implementados
 
-**Total de Triggers:** 15
+**Total de Triggers:** 10
 
-#### Auditoria
+#### Auditoria (7 triggers)
 
-- `audit_app_user`
-- `audit_citizen`
-- `audit_vehicle`
-- `audit_sensor`
-- `audit_traffic_incident`
-- `audit_fine`
-- `audit_fine_payment`
-- `audit_app_user_notification`
+- `audit_app_user` - Auditoria de usuários
+- `audit_citizen` - Auditoria de cidadãos
+- `audit_vehicle` - Auditoria de veículos
+- `audit_sensor` - Auditoria de sensores
+- `audit_fine` - Auditoria de multas
+- `audit_fine_payment` - Auditoria de pagamentos
+- `audit_app_user_notification` - Auditoria de notificações
 
-#### Soft Delete e Timestamps
+#### Soft Delete (3 triggers)
 
-- `trg_app_user_updated_at`
-- `trg_citizen_soft_delete`
-- `trg_sensor_soft_delete`
-- `trg_vehicle_soft_delete`
+- `trg_soft_delete_citizen` - Soft delete genérico de cidadãos
+- `trg_soft_delete_vehicle` - Soft delete genérico de veículos
+- `trg_soft_delete_sensor` - Soft delete genérico de sensores
 
-#### Proteção de Dados
+#### Proteção de Dados (3 triggers)
 
-- `trg_block_update_deleted_citizen`
-- `trg_block_update_deleted_sensor`
+- `trg_block_update_deleted_citizen` - Bloqueio genérico de cidadãos deletados
+- `trg_block_update_deleted_vehicle` - Bloqueio genérico de veículos deletados
+- `trg_block_update_deleted_sensor` - Bloqueio genérico de sensores deletados
 
-#### Processamento de Multas
+#### Processamento de Multas (2 triggers)
 
-- `trigger_apply_fine`
-- `trigger_apply_fine_payment`
-- `trg_cancel_fines_on_citizen_delete`
-- `trigger_prevent_delete_citizen_with_pending_fines`
+- `trg_apply_fine` - Aplicação automática de multas
+- `trg_apply_fine_payment` - Processamento de pagamentos
+
+### 6. Fluxo de Soft Delete
+
+O sistema implementa um fluxo completo de soft delete genérico:
+
+1. **DELETE Inicial** → Trigger `soft_delete_generic()` marca `deleted_at` e `allowed = FALSE`
+2. **Proteção** → Trigger `block_update_deleted_generic()` impede alterações posteriores
+3. **Auditoria** → Trigger `audit_*()` registra a operação
+4. **Configuração Temporária** → Usa `app.soft_delete` para controle do fluxo
+
+### 7. Views de Dados Ativos
+
+O sistema implementa views para facilitar consultas a registros ativos:
+
+#### `citizen_active`
+
+**Descrição:** View com todos os cidadãos não deletados
+**SQL:** `SELECT * FROM citizen WHERE deleted_at IS NULL`
+
+#### `vehicle_active`
+
+**Descrição:** View com todos os veículos não deletados
+**SQL:** `SELECT * FROM vehicle WHERE deleted_at IS NULL`
+
+#### `sensor_active`
+
+**Descrição:** View com todos os sensores não deletados
+**SQL:** `SELECT * FROM sensor WHERE deleted_at IS NULL`
+
+#### `app_user_active`
+
+**Descrição:** View com todos os usuários não deletados
+**SQL:** `SELECT * FROM app_user WHERE deleted_at IS NULL`
+
+**Benefícios das Views:**
+
+- Simplifica consultas frequentes
+- Centraliza lógica de filtros
+- Melhora performance com cache
+- Facilita manutenção de queries
+
+### 8. Otimizações de Performance
+
+- **Índices Condicionais**: Funcionam apenas com registros ativos
+- **Queries Otimizadas**: Acesso direto por `citizen_id`
+- **Locks Eficientes**: `FOR UPDATE` apenas onde necessário
+- **JSONB Compacto**: Auditoria com estrutura otimizada
 
 ## Índices de Performance
 
@@ -974,17 +1154,23 @@ Nesta seção, descrevemos a arquitetura do sistema, incluindo as extensões e f
 
 **Tabelas com Soft Delete:**
 
-- `app_user`: `deleted_at` + índice único condicional
 - `citizen`: `deleted_at` + índices únicos condicionais (CPF, email)
 - `vehicle`: `deleted_at` + índice único condicional (placa)
 - `sensor`: `deleted_at` + desativação automática
 
-**Triggers de Soft Delete:**
+**Triggers de Soft Delete Genérico:**
 
-- `citizen_soft_delete()`: Bloqueia automaticamente cidadãos deletados
-- `sensor_soft_delete()`: Desativa sensores deletados
-- `vehicle_soft_delete()`: Bloqueia veículos deletados
-- `block_update_deleted_*()`: Impede modificação de registros deletados
+- `soft_delete_generic()`: Função única para todas as tabelas
+- `block_update_deleted_generic()`: Função única de proteção
+- Configuração temporária `app.soft_delete` para controle do fluxo
+- Execução dinâmica com `format()` para qualquer tabela
+
+**Views de Dados Ativos:**
+
+- `citizen_active`: Cidadãos não deletados
+- `vehicle_active`: Veículos não deletados
+- `sensor_active`: Sensores não deletados
+- `app_user_active`: Usuários não deletados
 
 ### Otimização de Performance
 
@@ -1000,12 +1186,12 @@ Nesta seção, descrevemos a arquitetura do sistema, incluindo as extensões e f
 - Índices filtrados para consultas comuns (ativos, pendentes)
 - 21 índices estratégicos para performance otimizada
 
-### Triggers Completos (15 ativos)
+### Triggers Completos (10 ativos)
 
-**Auditoria (8):** Registro completo em todas as tabelas principais
-**Soft Delete (4):** Exclusão lógica automática e proteção
-**Proteção (2):** Bloqueio de atualização em registros deletados  
-**Multas (4):** Processamento automático completo
+**Auditoria (7):** Registro completo em todas as tabelas principais
+**Soft Delete (3):** Exclusão lógica genérica e automática
+**Proteção (3):** Bloqueio genérico de atualização em registros deletados  
+**Multas (2):** Processamento automático completo
 
 ## Extensões Futuras
 
@@ -1035,10 +1221,11 @@ Para dúvidas e suporte:
 
 ### Implementações Principais
 
-- **Soft Delete Completo**: 4 tabelas principais com exclusão lógica  
-- **15 Triggers Ativos**: Auditoria, proteção e processamento automático  
+- **Soft Delete Completo**: 3 tabelas principais com exclusão lógica genérica  
+- **10 Triggers Ativos**: Auditoria, proteção e processamento automático  
 - **21 Índices Otimizados**: Performance e reutilização de dados  
-- **Proteção de Dados**: Bloqueio de atualização em registros deletados  
+- **Proteção de Dados**: Bloqueio genérico de atualização em registros deletados  
+- **Views de Dados Ativos**: 4 views para consultas simplificadas  
 - **Relatórios Profissionais**: Excel com múltiplas abas e gráficos  
 - **Dashboard Interativo**: Plotly com visualizações avançadas  
 

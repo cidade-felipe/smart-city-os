@@ -10,6 +10,10 @@ plotly==6.5.0
 kaleido==1.2.0
 Pillow==12.1.0
 
+# Dash GUI v1.1 - Interface Web
+dash==2.18.2
+dash-bootstrap-components==1.6.0
+
 # Análise de dados e exportação
 pandas==2.3.3
 numpy==2.4.0

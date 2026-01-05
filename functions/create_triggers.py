@@ -18,14 +18,17 @@ def create_all_triggers(conn_info,file_path_func,file_path_trig):
                 # Execute the SQL statements
                 cur.execute(trigger_functions_sql)
                 cur.execute(triggers_sql)
+                conn.commit()
         
         print("Database triggers created successfully")
     except Exception as e:
         print(f"Error: {e}")
-        conn.rollback()
+        try:
+            conn.rollback()
+        except:
+            pass
         import traceback
         traceback.print_exc()
-        conn.rollback()
 
 if __name__ == "__main__":
     from conect_db import connect_to_db

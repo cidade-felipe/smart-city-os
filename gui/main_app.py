@@ -15,6 +15,7 @@ import pandas as pd
 from tabulate import tabulate
 from dotenv import load_dotenv
 from gui.styles import SmartCityStyles
+import io
 
 # Carregar variáveis de ambiente
 load_dotenv()
@@ -340,6 +341,16 @@ class SmartCityOSGUI:
         for widget in self.content_frame.winfo_children():
             widget.destroy()
     
+    def is_username_available(self, username):
+        """Verifica se username está disponível (apenas em usuários ativos)"""
+        try:
+            with psy.connect(self.get_connection_string()) as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT id FROM app_user_active WHERE username = %s", (username,))
+                    return cur.fetchone() is None
+        except:
+            return False
+    
     def show_welcome_message(self):
         """Mostra mensagem de boas-vindas na tela inicial"""
         self.clear_content()
@@ -411,12 +422,12 @@ class SmartCityOSGUI:
                     stats['users'] = user_stats
                     
                     # Cidadãos
-                    cur.execute("SELECT COUNT(*) as total, COUNT(CASE WHEN debt > 0 THEN 1 END) as with_debt, COALESCE(SUM(debt), 0) as total_debt FROM citizen")
+                    cur.execute("SELECT COUNT(*) as total, COUNT(CASE WHEN debt > 0 THEN 1 END) as with_debt, COALESCE(SUM(debt), 0) as total_debt FROM citizen_active")
                     citizen_stats = cur.fetchone()
                     stats['citizens'] = citizen_stats
                     
                     # Veículos
-                    cur.execute("SELECT COUNT(*) as total, COUNT(CASE WHEN allowed = TRUE THEN 1 END) as active FROM vehicle")
+                    cur.execute("SELECT COUNT(*) as total, COUNT(CASE WHEN allowed = TRUE THEN 1 END) as active FROM vehicle_active")
                     vehicle_stats = cur.fetchone()
                     stats['vehicles'] = vehicle_stats
                     
@@ -431,7 +442,7 @@ class SmartCityOSGUI:
                     stats['fines'] = fine_stats
                     
                     # Sensores
-                    cur.execute("SELECT COUNT(*) as total, COUNT(CASE WHEN active = TRUE THEN 1 END) as active FROM sensor")
+                    cur.execute("SELECT COUNT(*) as total, COUNT(CASE WHEN active = TRUE THEN 1 END) as active FROM sensor_active")
                     sensor_stats = cur.fetchone()
                     stats['sensors'] = sensor_stats
                     
@@ -720,7 +731,7 @@ class SmartCityOSGUI:
                         SELECT c.id, c.first_name, c.last_name, c.email, c.cpf, c.phone,
                                c.address, c.birth_date, c.wallet_balance, c.debt, c.allowed,
                                u.username, c.created_at
-                        FROM citizen c
+                        FROM citizen_active c
                         JOIN app_user u ON c.app_user_id = u.id
                         ORDER BY c.first_name, c.last_name
                     """)
@@ -1072,7 +1083,7 @@ class SmartCityOSGUI:
                     cur.execute("""
                         SELECT v.id, v.license_plate, v.model, v.year, v.allowed,
                                u.username, c.first_name, c.last_name
-                        FROM vehicle v
+                        FROM vehicle_active v
                         JOIN app_user u ON v.app_user_id = u.id
                         LEFT JOIN citizen c ON v.citizen_id = c.id
                         ORDER BY v.license_plate
@@ -1410,7 +1421,7 @@ class SmartCityOSGUI:
                         SELECT s.id, s.type, s.location, s.active, 
                                COUNT(r.id) as reading_count,
                                MAX(r.timestamp) as last_reading
-                        FROM sensor s
+                        FROM sensor_active s
                         LEFT JOIN reading r ON s.id = r.sensor_id
                         GROUP BY s.id, s.type, s.location, s.active
                         ORDER BY s.type, s.location
@@ -2654,7 +2665,7 @@ class SmartCityOSGUI:
                     cur.execute("""
                         SELECT CASE WHEN allowed = TRUE THEN 'Ativos' ELSE 'Bloqueados' END as status, 
                                COUNT(*) as count
-                        FROM vehicle 
+                        FROM vehicle_active 
                         GROUP BY allowed
                     """)
                     vehicles_by_status = cur.fetchall()
@@ -2664,7 +2675,7 @@ class SmartCityOSGUI:
                     cur.execute("""
                         SELECT type, COUNT(*) as count, 
                                COUNT(CASE WHEN active = TRUE THEN 1 END) as active
-                        FROM sensor 
+                        FROM sensor_active 
                         GROUP BY type
                         ORDER BY count DESC
                     """)
@@ -3083,7 +3094,7 @@ class SmartCityOSGUI:
                         cur.execute("""
                             SELECT CASE WHEN allowed = TRUE THEN 'Ativos' ELSE 'Bloqueados' END as status, 
                                    COUNT(*) as count
-                            FROM vehicle 
+                            FROM vehicle_active 
                             WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'
                             GROUP BY allowed
                         """)
@@ -3091,7 +3102,7 @@ class SmartCityOSGUI:
                         cur.execute("""
                             SELECT CASE WHEN allowed = TRUE THEN 'Ativos' ELSE 'Bloqueados' END as status, 
                                    COUNT(*) as count
-                            FROM vehicle 
+                            FROM vehicle_active 
                             WHERE created_at >= CURRENT_DATE - INTERVAL '30 days'
                             GROUP BY allowed
                         """)
@@ -3099,7 +3110,7 @@ class SmartCityOSGUI:
                         cur.execute("""
                             SELECT CASE WHEN allowed = TRUE THEN 'Ativos' ELSE 'Bloqueados' END as status, 
                                    COUNT(*) as count
-                            FROM vehicle 
+                            FROM vehicle_active 
                             WHERE created_at >= CURRENT_DATE - INTERVAL '90 days'
                             GROUP BY allowed
                         """)
@@ -3107,7 +3118,7 @@ class SmartCityOSGUI:
                         cur.execute("""
                             SELECT CASE WHEN allowed = TRUE THEN 'Ativos' ELSE 'Bloqueados' END as status, 
                                    COUNT(*) as count
-                            FROM vehicle 
+                            FROM vehicle_active 
                             GROUP BY allowed
                         """)
                     vehicles_by_status = cur.fetchall()
@@ -3118,7 +3129,7 @@ class SmartCityOSGUI:
                         cur.execute("""
                             SELECT type, COUNT(*) as count, 
                                    COUNT(CASE WHEN active = TRUE THEN 1 END) as active
-                            FROM sensor 
+                            FROM sensor_active 
                             WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'
                             GROUP BY type
                             ORDER BY count DESC
@@ -3127,7 +3138,7 @@ class SmartCityOSGUI:
                         cur.execute("""
                             SELECT type, COUNT(*) as count, 
                                    COUNT(CASE WHEN active = TRUE THEN 1 END) as active
-                            FROM sensor 
+                            FROM sensor_active 
                             WHERE created_at >= CURRENT_DATE - INTERVAL '30 days'
                             GROUP BY type
                             ORDER BY count DESC
@@ -3136,7 +3147,7 @@ class SmartCityOSGUI:
                         cur.execute("""
                             SELECT type, COUNT(*) as count, 
                                    COUNT(CASE WHEN active = TRUE THEN 1 END) as active
-                            FROM sensor 
+                            FROM sensor_active 
                             WHERE created_at >= CURRENT_DATE - INTERVAL '90 days'
                             GROUP BY type
                             ORDER BY count DESC
@@ -3145,7 +3156,7 @@ class SmartCityOSGUI:
                         cur.execute("""
                             SELECT type, COUNT(*) as count, 
                                    COUNT(CASE WHEN active = TRUE THEN 1 END) as active
-                            FROM sensor 
+                            FROM sensor_active 
                             GROUP BY type
                             ORDER BY count DESC
                         """)
@@ -3433,10 +3444,12 @@ class SmartCityOSGUI:
             messagebox.showerror("Erro", f"Erro ao abrir dashboard interativo: {str(e)}")
     
     def export_dashboard_excel(self):
-        """Exporta dashboard para Excel com dados brutos"""
+        """Exporta dashboard para Excel com formatação profissional e múltiplas abas"""
         try:
             import pandas as pd
             from tkinter import filedialog
+            import xlsxwriter
+            from xlsxwriter.utility import xl_range, xl_rowcol_to_cell
             
             if not hasattr(self, 'current_data'):
                 messagebox.showwarning("Aviso", "Nenhum dado para exportar. Gere o dashboard primeiro!")
@@ -3444,62 +3457,437 @@ class SmartCityOSGUI:
             
             # File dialog para salvar
             file_path = filedialog.asksaveasfilename(
-                title="Exportar Dados para Excel",
+                title="Exportar Relatório SmartCityOS",
                 defaultextension=".xlsx",
                 filetypes=[("Arquivo Excel (*.xlsx)", "*.xlsx"), ("Todos os Arquivos", "*.*")],
-                initialfile=f"dados_smartcity_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+                initialfile=f"relatorio_smartcity_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
             )
             
             if not file_path:
                 return
             
-            # Criar Excel writer
+            # Criar Excel writer com formatação avançada
             with pd.ExcelWriter(file_path, engine='xlsxwriter') as writer:
-                # 1. Incidentes
+                workbook = writer.book
+                
+                # Definir estilos profissionais
+                header_format = workbook.add_format({
+                    'bold': True,
+                    'font_size': 12,
+                    'bg_color': '#2E86AB',
+                    'font_color': 'white',
+                    'border': 1,
+                    'border_color': '#000000',
+                    'align': 'center',
+                    'valign': 'vcenter'
+                })
+                
+                title_format = workbook.add_format({
+                    'bold': True,
+                    'font_size': 16,
+                    'bg_color': '#1E5F74',
+                    'font_color': 'white',
+                    'border': 1,
+                    'border_color': '#000000',
+                    'align': 'center',
+                    'valign': 'vcenter'
+                })
+                
+                subtitle_format = workbook.add_format({
+                    'bold': True,
+                    'font_size': 11,
+                    'bg_color': '#F4F4F4',
+                    'font_color': '#333333',
+                    'border': 1,
+                    'border_color': '#000000',
+                    'align': 'left',
+                    'valign': 'vcenter'
+                })
+                
+                data_format = workbook.add_format({
+                    'font_size': 10,
+                    'bg_color': 'white',
+                    'font_color': '#333333',
+                    'border': 1,
+                    'border_color': '#D0D0D0',
+                    'align': 'center',
+                    'valign': 'vcenter'
+                })
+                
+                currency_format = workbook.add_format({
+                    'font_size': 10,
+                    'bg_color': 'white',
+                    'font_color': '#2E7D32',
+                    'border': 1,
+                    'border_color': '#D0D0D0',
+                    'align': 'right',
+                    'valign': 'vcenter',
+                    'num_format': 'R$ #,##0.00'
+                })
+                
+                number_format = workbook.add_format({
+                    'font_size': 10,
+                    'bg_color': 'white',
+                    'font_color': '#333333',
+                    'border': 1,
+                    'border_color': '#D0D0D0',
+                    'align': 'right',
+                    'valign': 'vcenter',
+                    'num_format': '#,##0'
+                })
+                
+                # 1. ABA: CAPA DO RELATÓRIO
+                cover_worksheet = workbook.add_worksheet('📊 Capa')
+                cover_worksheet.set_column('A:A', 50)
+                cover_worksheet.set_column('B:B', 30)
+                
+                # Título principal
+                cover_worksheet.merge_range('A1:B1', '🏙️ SmartCityOS - Relatório Completo', title_format)
+                cover_worksheet.merge_range('A2:B2', f'Gerado em: {datetime.now().strftime("%d/%m/%Y %H:%M:%S")}', subtitle_format)
+                cover_worksheet.merge_range('A3:B3', f'Período: {self.period_var.get() if hasattr(self, "period_var") else "Todos"}', subtitle_format)
+                
+                # Estatísticas principais
+                row = 5
+                cover_worksheet.write(row, 0, '📈 ESTATÍSTICAS GERAIS', title_format)
+                row += 1
+                
+                stats = [
+                    ('Total de Incidentes', len(self.current_data.get('incident_timeline', [])), '#FF6B6B'),
+                    ('Total de Multas', len(self.current_data.get('fines_by_status', [])), '#4ECDC4'),
+                    ('Total de Veículos', len(self.current_data.get('vehicles_by_status', [])), '#45B7D1'),
+                    ('Total de Sensores', len(self.current_data.get('sensors_by_type', [])), '#96CEB4'),
+                    ('Total de Usuários', len(self.current_data.get('user_growth', [])), '#FFA07A'),
+                ]
+                
+                for stat_name, stat_value, color in stats:
+                    stat_format = workbook.add_format({
+                        'bold': True,
+                        'font_size': 11,
+                        'bg_color': color,
+                        'font_color': 'white',
+                        'border': 1,
+                        'border_color': '#000000',
+                        'align': 'center',
+                        'valign': 'vcenter'
+                    })
+                    cover_worksheet.write(row, 0, stat_name, stat_format)
+                    cover_worksheet.write(row, 1, stat_value, number_format)
+                    row += 1
+                
+                # 2. ABA: INCIDENTES DETALHADOS
                 if self.current_data.get('incident_timeline'):
+                    incidents_worksheet = workbook.add_worksheet('🚨 Incidentes')
+                    
+                    # Configurar colunas
+                    incidents_worksheet.set_column('A:A', 15)
+                    incidents_worksheet.set_column('B:B', 20)
+                    
+                    # Título
+                    incidents_worksheet.merge_range('A1:B1', '🚨 INCIDENTES - ANÁLISE TEMPORAL', title_format)
+                    incidents_worksheet.merge_range('A2:B2', f'Período: {self.period_var.get() if hasattr(self, "period_var") else "Todos"}', subtitle_format)
+                    
+                    # Dados
                     df_incidents = pd.DataFrame(self.current_data['incident_timeline'])
-                    df_incidents.to_excel(writer, sheet_name='Incidentes', index=False)
+                    if not df_incidents.empty:
+                        # Renomear colunas para português
+                        df_incidents.columns = ['Data', 'Quantidade']
+                        
+                        # Adicionar colunas de análise
+                        df_incidents['Dia da Semana'] = pd.to_datetime(df_incidents['Data']).dt.day_name()
+                        df_incidents['Mês'] = pd.to_datetime(df_incidents['Data']).dt.month_name()
+                        
+                        # Escrever dados com formatação
+                        for col_num, value in enumerate(df_incidents.columns):
+                            incidents_worksheet.write(3, col_num, value, header_format)
+                        
+                        for row_num, (_, row) in enumerate(df_incidents.iterrows(), start=4):
+                            for col_num, value in enumerate(row):
+                                if col_num == 1:  # Quantidade
+                                    incidents_worksheet.write(row_num, col_num, value, number_format)
+                                else:
+                                    incidents_worksheet.write(row_num, col_num, value, data_format)
+                    
+                    # Gráfico de incidentes
+                    if not df_incidents.empty:
+                        chart = workbook.add_chart({'type': 'line'})
+                        chart.add_series({
+                            'categories': f'=Incidentes!$A$4:$A${len(df_incidents)+3}',
+                            'values': f'=Incidentes!$B$4:$B${len(df_incidents)+3}',
+                            'name': 'Incidentes',
+                            'line': {'color': '#FF6B6B', 'width': 3},
+                            'marker': {'type': 'circle', 'size': 6, 'fill': {'color': '#FF6B6B'}}
+                        })
+                        chart.set_title({'name': 'Evolução de Incidentes'})
+                        chart.set_x_axis({'name': 'Data'})
+                        chart.set_y_axis({'name': 'Quantidade'})
+                        chart.set_legend({'none': True})
+                        incidents_worksheet.insert_chart('F2', chart)
                 
-                # 2. Multas
+                # 3. ABA: MULTAS COMPLETAS
                 if self.current_data.get('fines_by_status'):
+                    fines_worksheet = workbook.add_worksheet('💰 Multas')
+                    
+                    # Configurar colunas
+                    fines_worksheet.set_column('A:A', 15)
+                    fines_worksheet.set_column('B:B', 15)
+                    fines_worksheet.set_column('C:C', 20)
+                    
+                    # Título
+                    fines_worksheet.merge_range('A1:C1', '💰 MULTAS - ANÁLISE FINANCEIRA', title_format)
+                    fines_worksheet.merge_range('A2:C2', f'Período: {self.period_var.get() if hasattr(self, "period_var") else "Todos"}', subtitle_format)
+                    
+                    # Dados
                     df_fines = pd.DataFrame(self.current_data['fines_by_status'])
-                    df_fines.to_excel(writer, sheet_name='Multas', index=False)
+                    if not df_fines.empty:
+                        # Renomear e traduzir
+                        df_fines.columns = ['Status', 'Quantidade', 'Valor Total']
+                        
+                        # Mapear status
+                        status_map = {'pending': 'Pendentes', 'paid': 'Pagas', 'overdue': 'Vencidas', 'cancelled': 'Canceladas'}
+                        df_fines['Status'] = df_fines['Status'].map(status_map).fillna(df_fines['Status'])
+                        
+                        # Adicionar análise
+                        total_multas = df_fines['Valor Total'].sum()
+                        df_fines['% do Total'] = (df_fines['Valor Total'] / total_multas * 100).round(2)
+                        
+                        # Escrever cabeçalho
+                        for col_num, value in enumerate(df_fines.columns):
+                            fines_worksheet.write(3, col_num, value, header_format)
+                        
+                        # Escrever dados
+                        for row_num, (_, row) in enumerate(df_fines.iterrows(), start=4):
+                            for col_num, value in enumerate(row):
+                                if col_num == 2:  # Valor Total
+                                    fines_worksheet.write(row_num, col_num, value, currency_format)
+                                elif col_num == 3:  # Percentual
+                                    percent_format = workbook.add_format({
+                                        'font_size': 10,
+                                        'bg_color': 'white',
+                                        'font_color': '#333333',
+                                        'border': 1,
+                                        'border_color': '#D0D0D0',
+                                        'align': 'right',
+                                        'valign': 'vcenter',
+                                        'num_format': '0.00%'
+                                    })
+                                    fines_worksheet.write(row_num, col_num, value, percent_format)
+                                elif col_num == 1:  # Quantidade
+                                    fines_worksheet.write(row_num, col_num, value, number_format)
+                                else:
+                                    fines_worksheet.write(row_num, col_num, value, data_format)
+                        
+                        # Total geral
+                        fines_worksheet.write(len(df_fines)+4, 1, 'TOTAL GERAL', title_format)
+                        fines_worksheet.write(len(df_fines)+4, 2, total_multas, currency_format)
+                        
+                        # Gráfico de pizza
+                        chart = workbook.add_chart({'type': 'pie'})
+                        for i, (_, row) in enumerate(df_fines.iterrows()):
+                            chart.add_series({
+                                'name': f"={row['Status']}",
+                                'categories': f'=Multas!$A$4:$A${len(df_fines)+3}',
+                                'values': f'=Multas!$C$4:$C${len(df_fines)+3}',
+                                'data_labels': {'percentage': True, 'position': 'out_end'}
+                            })
+                        chart.set_title({'name': 'Distribuição de Multas por Status'})
+                        fines_worksheet.insert_chart('F2', chart)
                 
-                # 3. Veículos
+                # 4. ABA: VEÍCULOS
                 if self.current_data.get('vehicles_by_status'):
+                    vehicles_worksheet = workbook.add_worksheet('🚗 Veículos')
+                    
+                    # Configurar colunas
+                    vehicles_worksheet.set_column('A:A', 20)
+                    vehicles_worksheet.set_column('B:B', 15)
+                    
+                    # Título
+                    vehicles_worksheet.merge_range('A1:B1', '🚗 FROTA DE VEÍCULOS', title_format)
+                    
+                    # Dados
                     df_vehicles = pd.DataFrame(self.current_data['vehicles_by_status'])
-                    df_vehicles.to_excel(writer, sheet_name='Veículos', index=False)
+                    if not df_vehicles.empty:
+                        df_vehicles.columns = ['Status', 'Quantidade']
+                        
+                        # Escrever dados
+                        for col_num, value in enumerate(df_vehicles.columns):
+                            vehicles_worksheet.write(3, col_num, value, header_format)
+                        
+                        for row_num, (_, row) in enumerate(df_vehicles.iterrows(), start=4):
+                            for col_num, value in enumerate(row):
+                                vehicles_worksheet.write(row_num, col_num, value, number_format)
+                        
+                        # Gráfico de barras
+                        chart = workbook.add_chart({'type': 'column'})
+                        chart.add_series({
+                            'categories': f'=Veículos!$A$4:$A${len(df_vehicles)+3}',
+                            'values': f'=Veículos!$B$4:$B${len(df_vehicles)+3}',
+                            'name': 'Veículos',
+                            'fill': {'color': '#45B7D1'}
+                        })
+                        chart.set_title({'name': 'Frota por Status'})
+                        chart.set_x_axis({'name': 'Status'})
+                        chart.set_y_axis({'name': 'Quantidade'})
+                        chart.set_legend({'none': True})
+                        vehicles_worksheet.insert_chart('D2', chart)
                 
-                # 4. Sensores
+                # 5. ABA: SENSORES
                 if self.current_data.get('sensors_by_type'):
+                    sensors_worksheet = workbook.add_worksheet('📡 Sensores')
+                    
+                    # Configurar colunas
+                    sensors_worksheet.set_column('A:A', 20)
+                    sensors_worksheet.set_column('B:B', 15)
+                    sensors_worksheet.set_column('C:C', 15)
+                    
+                    # Título
+                    sensors_worksheet.merge_range('A1:C1', '📡 REDE DE SENSORES', title_format)
+                    
+                    # Dados
                     df_sensors = pd.DataFrame(self.current_data['sensors_by_type'])
-                    df_sensors.to_excel(writer, sheet_name='Sensores', index=False)
+                    if not df_sensors.empty:
+                        df_sensors.columns = ['Tipo', 'Total', 'Ativos']
+                        
+                        # Calcular percentual de ativos
+                        df_sensors['% Ativos'] = (df_sensors['Ativos'] / df_sensors['Total'] * 100).round(2)
+                        
+                        # Escrever dados
+                        for col_num, value in enumerate(df_sensors.columns):
+                            sensors_worksheet.write(3, col_num, value, header_format)
+                        
+                        for row_num, (_, row) in enumerate(df_sensors.iterrows(), start=4):
+                            for col_num, value in enumerate(row):
+                                if col_num == 3:  # Percentual
+                                    percent_format = workbook.add_format({
+                                        'font_size': 10,
+                                        'bg_color': 'white',
+                                        'font_color': '#333333',
+                                        'border': 1,
+                                        'border_color': '#D0D0D0',
+                                        'align': 'right',
+                                        'valign': 'vcenter',
+                                        'num_format': '0.00%'
+                                    })
+                                    sensors_worksheet.write(row_num, col_num, value, percent_format)
+                                else:
+                                    sensors_worksheet.write(row_num, col_num, value, number_format)
+                        
+                        # Gráfico horizontal
+                        chart = workbook.add_chart({'type': 'bar'})
+                        chart.add_series({
+                            'categories': f'=Sensores!$A$4:$A${len(df_sensors)+3}',
+                            'values': f'=Sensores!$B$4:$B${len(df_sensors)+3}',
+                            'name': 'Total de Sensores',
+                            'fill': {'color': '#96CEB4'}
+                        })
+                        chart.set_title({'name': 'Sensores por Tipo'})
+                        chart.set_x_axis({'name': 'Quantidade'})
+                        chart.set_y_axis({'name': 'Tipo'})
+                        chart.set_legend({'none': True})
+                        sensors_worksheet.insert_chart('F2', chart)
                 
-                # 5. Usuários
+                # 6. ABA: USUÁRIOS
                 if self.current_data.get('user_growth'):
+                    users_worksheet = workbook.add_worksheet('👥 Usuários')
+                    
+                    # Configurar colunas
+                    users_worksheet.set_column('A:A', 15)
+                    users_worksheet.set_column('B:B', 15)
+                    
+                    # Título
+                    users_worksheet.merge_range('A1:B1', '👥 CRESCIMENTO DE USUÁRIOS', title_format)
+                    users_worksheet.merge_range('A2:B2', f'Período: {self.period_var.get() if hasattr(self, "period_var") else "Todos"}', subtitle_format)
+                    
+                    # Dados
                     df_users = pd.DataFrame(self.current_data['user_growth'])
-                    df_users.to_excel(writer, sheet_name='Usuários', index=False)
+                    if not df_users.empty:
+                        df_users.columns = ['Data', 'Novos Usuários']
+                        
+                        # Escrever dados
+                        for col_num, value in enumerate(df_users.columns):
+                            users_worksheet.write(3, col_num, value, header_format)
+                        
+                        for row_num, (_, row) in enumerate(df_users.iterrows(), start=4):
+                            for col_num, value in enumerate(row):
+                                if col_num == 1:
+                                    users_worksheet.write(row_num, col_num, value, number_format)
+                                else:
+                                    users_worksheet.write(row_num, col_num, value, data_format)
+                        
+                        # Gráfico de área
+                        chart = workbook.add_chart({'type': 'area'})
+                        chart.add_series({
+                            'categories': f'=Usuários!$A$4:$A${len(df_users)+3}',
+                            'values': f'=Usuários!$B$4:$B${len(df_users)+3}',
+                            'name': 'Novos Usuários',
+                            'fill': {'color': '#FFA07A', 'transparency': 30}
+                        })
+                        chart.set_title({'name': 'Crescimento de Usuários'})
+                        chart.set_x_axis({'name': 'Data'})
+                        chart.set_y_axis({'name': 'Novos Usuários'})
+                        chart.set_legend({'none': True})
+                        users_worksheet.insert_chart('D2', chart)
                 
-                # 6. Resumo
-                summary_data = {
-                    'Métrica': ['Total de Incidentes', 'Total de Multas', 'Total de Veículos', 'Total de Sensores', 'Total de Usuários'],
-                    'Quantidade': [
-                        len(self.current_data.get('incident_timeline', [])),
-                        len(self.current_data.get('fines_by_status', [])),
-                        len(self.current_data.get('vehicles_by_status', [])),
-                        len(self.current_data.get('sensors_by_type', [])),
-                        len(self.current_data.get('user_growth', []))
-                    ]
-                }
-                df_summary = pd.DataFrame(summary_data)
-                df_summary.to_excel(writer, sheet_name='Resumo', index=False)
+                # 7. ABA: RESUMO EXECUTIVO
+                summary_worksheet = workbook.add_worksheet('📋 Resumo Executivo')
+                summary_worksheet.set_column('A:A', 30)
+                summary_worksheet.set_column('B:B', 20)
+                summary_worksheet.set_column('C:C', 25)
+                
+                # Título
+                summary_worksheet.merge_range('A1:C1', '📋 RESUMO EXECUTIVO - SMARTCITYOS', title_format)
+                summary_worksheet.merge_range('A2:C2', f'Relatório gerado em {datetime.now().strftime("%d/%m/%Y %H:%M")}', subtitle_format)
+                
+                # Métricas principais
+                row = 4
+                summary_worksheet.write(row, 0, 'MÉTRICA PRINCIPAL', title_format)
+                summary_worksheet.write(row, 1, 'VALOR ATUAL', title_format)
+                summary_worksheet.write(row, 2, 'OBSERVAÇÕES', title_format)
+                row += 1
+                
+                # Dados do resumo
+                summary_data = [
+                    ('🚨 Total de Incidentes', len(self.current_data.get('incident_timeline', [])), 'Eventos registrados no período'),
+                    ('💰 Total de Multas Emitidas', len(self.current_data.get('fines_by_status', [])), 'Documentos fiscais gerados'),
+                    ('💵 Valor Total em Multas', f"R$ {sum([item.get('total_amount', 0) for item in self.current_data.get('fines_by_status', [])]):,.2f}", 'Receita potencial do sistema'),
+                    ('🚗 Veículos Cadastrados', len(self.current_data.get('vehicles_by_status', [])), 'Frota total monitorada'),
+                    ('📡 Sensores Ativos', sum([item.get('active', 0) for item in self.current_data.get('sensors_by_type', [])]), 'Dispositivos funcionando'),
+                    ('👥 Novos Usuários', len(self.current_data.get('user_growth', [])), 'Crescimento da base de usuários'),
+                ]
+                
+                for metric, value, observation in summary_data:
+                    summary_worksheet.write(row, 0, metric, subtitle_format)
+                    if 'R$' in str(value):
+                        summary_worksheet.write(row, 1, value, currency_format)
+                    else:
+                        summary_worksheet.write(row, 1, value, number_format)
+                    summary_worksheet.write(row, 2, observation, data_format)
+                    row += 1
+                
+                # Insights
+                row += 2
+                summary_worksheet.merge_range(f'A{row}:C{row}', '🎯 INSIGHTS E RECOMENDAÇÕES', title_format)
+                row += 1
+                
+                insights = [
+                    '📊 Análise de Tendências: Monitore o crescimento de usuários para planejar capacidade',
+                    '💰 Otimização Financeira: Verifique o índice de multas pagas vs pendentes',
+                    '🚗 Gestão da Frota: Analise o balanceamento entre veículos ativos e bloqueados',
+                    '📡 Manutenção: Sensores inativos podem precisar de manutenção preventiva',
+                    '🚨 Segurança: Incidentes em alta podem indicar necessidade de intervenção',
+                ]
+                
+                for insight in insights:
+                    summary_worksheet.merge_range(f'A{row}:C{row}', insight, data_format)
+                    row += 1
             
-            messagebox.showinfo("Sucesso", f"Dados exportados para Excel:\n{file_path}")
+            messagebox.showinfo("✅ Sucesso", f"📊 Relatório profissional exportado com sucesso!\n\n📁 Arquivo: {file_path}\n\n✨ Formato: Excel com múltiplas abas, gráficos e formatação avançada")
             
         except ImportError:
-            messagebox.showerror("Erro", "Bibliotecas necessárias não encontradas!\n\nInstale:\npip install xlsxwriter")
+            messagebox.showerror("❌ Erro", "Bibliotecas necessárias não encontradas!\n\nInstale:\npip install xlsxwriter openpyxl")
         except Exception as e:
-            messagebox.showerror("Erro", f"Erro ao exportar Excel: {str(e)}")
+            messagebox.showerror("❌ Erro", f"Erro ao exportar relatório: {str(e)}")
+            import traceback
+            print(f"Erro completo: {traceback.format_exc()}")
     
     def export_dashboard_html(self):
         """Exporta dashboard para HTML com Plotly"""
@@ -3574,7 +3962,7 @@ class SmartCityOSGUI:
                     cur.execute("""
                         SELECT CASE WHEN allowed = TRUE THEN 'Ativos' ELSE 'Bloqueados' END as status, 
                                COUNT(*) as count
-                        FROM vehicle 
+                        FROM vehicle_active 
                         GROUP BY allowed
                     """)
                     vehicles_by_status = cur.fetchall()
@@ -3584,7 +3972,7 @@ class SmartCityOSGUI:
                     cur.execute("""
                         SELECT type, COUNT(*) as count, 
                                COUNT(CASE WHEN active = TRUE THEN 1 END) as active
-                        FROM sensor 
+                        FROM sensor_active 
                         GROUP BY type
                         ORDER BY count DESC
                     """)
@@ -3844,7 +4232,7 @@ class SmartCityOSGUI:
                         cur.execute("""
                             SELECT CASE WHEN allowed = TRUE THEN 'Ativos' ELSE 'Bloqueados' END as status, 
                                    COUNT(*) as count
-                            FROM vehicle 
+                            FROM vehicle_active 
                             GROUP BY allowed
                         """)
                         vehicles_by_status = cur.fetchall()
@@ -3854,7 +4242,7 @@ class SmartCityOSGUI:
                         cur.execute("""
                             SELECT type, COUNT(*) as count, 
                                    COUNT(CASE WHEN active = TRUE THEN 1 END) as active
-                            FROM sensor 
+                            FROM sensor_active 
                             GROUP BY type
                             ORDER BY count DESC
                         """)
@@ -4104,7 +4492,7 @@ class SmartCityOSGUI:
             cur.execute("""
                 SELECT type, COUNT(*) as count, 
                        COUNT(CASE WHEN active = TRUE THEN 1 END) as active
-                FROM sensor
+                FROM sensor_active
                 GROUP BY type
                 ORDER BY count DESC
             """)
@@ -4114,7 +4502,7 @@ class SmartCityOSGUI:
                 SELECT COUNT(*) as total_sensors,
                        COUNT(CASE WHEN active = TRUE THEN 1 END) as active_sensors,
                        COUNT(DISTINCT type) as sensor_types
-                FROM sensor
+                FROM sensor_active
             """)
             stats['sensors'] = cur.fetchone()
         except Exception as e:
@@ -4995,11 +5383,11 @@ class SmartCityOSGUI:
     def load_sql_example(self):
         """Carrega um exemplo de query SQL no editor"""
         examples = [
-            "SELECT COUNT(*) as total_citizens FROM citizen;",
-            "SELECT * FROM vehicle WHERE allowed = TRUE;",
-            "SELECT v.license_plate, c.wallet_balance FROM vehicle v JOIN citizen c ON v.citizen_id = c.id;",
+            "SELECT COUNT(*) as total_citizens FROM citizen_active;",
+            "SELECT * FROM vehicle_active WHERE allowed = TRUE;",
+            "SELECT v.license_plate, c.wallet_balance FROM vehicle_active v JOIN citizen_active c ON v.citizen_id = c.id;",
             "SELECT status, COUNT(*) FROM fine GROUP BY status;",
-            "SELECT type, COUNT(*) FROM sensor GROUP BY type ORDER BY COUNT DESC;"
+            "SELECT type, COUNT(*) FROM sensor_active GROUP BY type ORDER BY COUNT DESC;"
         ]
         
         try:
@@ -5247,6 +5635,11 @@ class SmartCityOSGUI:
                     birth_date_obj = datetime.strptime(birth_date, '%d/%m/%Y').date()
                 except:
                     messagebox.showerror("Erro", "Data de nascimento inválida! Use DD/MM/AAAA")
+                    return
+                
+                # Verificar se username já existe (apenas em usuários ativos)
+                if not self.is_username_available(username):
+                    messagebox.showerror("Erro", f"Username '{username}' já está em uso! Escolha outro.")
                     return
                 
                 with psy.connect(self.get_connection_string()) as conn:
@@ -5518,13 +5911,18 @@ class SmartCityOSGUI:
                     
                     with psy.connect(self.get_connection_string()) as conn:
                         with conn.cursor() as cur:
-                            cur.execute("SELECT id FROM citizen WHERE cpf = %s", (cpf_clean,))
+                            cur.execute("SELECT id FROM citizen_active WHERE cpf = %s", (cpf_clean,))
                             citizen_result = cur.fetchone()
                             if citizen_result:
                                 citizen_id = citizen_result[0]
                             else:
                                 messagebox.showerror("Erro", "CPF não encontrado no sistema! Cadastre o cidadão primeiro.")
                                 return
+                
+                # Verificar se username já existe (apenas em usuários ativos)
+                if not self.is_username_available(vars['username'].get()):
+                    messagebox.showerror("Erro", f"Username '{vars['username'].get()}' já está em uso! Escolha outro.")
+                    return
                 
                 with psy.connect(self.get_connection_string()) as conn:
                     with conn.cursor() as cur:
@@ -5780,6 +6178,11 @@ class SmartCityOSGUI:
                     messagebox.showerror("Erro", "Preencha todos os campos obrigatórios!")
                     return
                 
+                # Verificar se username já existe (apenas em usuários ativos)
+                if not self.is_username_available(vars['username'].get()):
+                    messagebox.showerror("Erro", f"Username '{vars['username'].get()}' já está em uso! Escolha outro.")
+                    return
+                
                 with psy.connect(self.get_connection_string()) as conn:
                     with conn.cursor() as cur:
                         # Inserir em app_user primeiro (sem hash temporariamente)
@@ -5859,11 +6262,11 @@ class SmartCityOSGUI:
             with psy.connect(self.get_connection_string()) as conn:
                 with conn.cursor() as cur:
                     # Buscar veículos
-                    cur.execute("SELECT license_plate, model FROM vehicle WHERE allowed = true ORDER BY license_plate")
+                    cur.execute("SELECT license_plate, model FROM vehicle_active WHERE allowed = true ORDER BY license_plate")
                     vehicles_list = [f"{row[0]} - {row[1]}" for row in cur.fetchall()]
                     
                     # Buscar sensores
-                    cur.execute("SELECT id, location, type FROM sensor WHERE active = true ORDER BY location")
+                    cur.execute("SELECT id, location, type FROM sensor_active WHERE active = true ORDER BY location")
                     sensors_list = [f"{row[0]} - {row[2]} - {row[1]}" for row in cur.fetchall()]
         except:
             pass
@@ -5928,7 +6331,7 @@ class SmartCityOSGUI:
                 with psy.connect(self.get_connection_string()) as conn:
                     with conn.cursor() as cur:
                         # Buscar ID do veículo
-                        cur.execute("SELECT id FROM vehicle WHERE license_plate = %s", (vehicle_plate,))
+                        cur.execute("SELECT id FROM vehicle_active WHERE license_plate = %s", (vehicle_plate,))
                         vehicle_result = cur.fetchone()
                         if not vehicle_result:
                             messagebox.showerror("Erro", "Veículo não encontrado!")

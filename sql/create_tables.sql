@@ -12,10 +12,11 @@ CREATE TABLE IF NOT EXISTS payment_method (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE app_user (
+CREATE TABLE IF NOT EXISTS app_user (
     id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     username VARCHAR(255) NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
+    allowed BOOLEAN DEFAULT TRUE,
     deleted_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -47,7 +48,7 @@ CREATE TABLE IF NOT EXISTS citizen (
     CONSTRAINT fk_user
       FOREIGN KEY (app_user_id)
       REFERENCES app_user(id)
-      ON DELETE CASCADE
+      ON DELETE RESTRICT
 );
 
 CREATE TABLE IF NOT EXISTS sensor (
@@ -64,7 +65,7 @@ CREATE TABLE IF NOT EXISTS sensor (
     CONSTRAINT fk_user
       FOREIGN KEY (app_user_id)
       REFERENCES app_user(id)
-      ON DELETE CASCADE
+      ON DELETE RESTRICT
 );
 
 CREATE TABLE IF NOT EXISTS vehicle (
@@ -113,7 +114,7 @@ CREATE TABLE IF NOT EXISTS vehicle_citizen (
     CONSTRAINT fk_citizen
       FOREIGN KEY (citizen_id)
       REFERENCES citizen(id)
-      ON DELETE CASCADE
+      ON DELETE RESTRICT
 );
 
 CREATE TABLE IF NOT EXISTS traffic_incident (
