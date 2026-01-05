@@ -86,7 +86,7 @@ CREATE TABLE IF NOT EXISTS vehicle (
     CONSTRAINT fk_user
       FOREIGN KEY (app_user_id)
       REFERENCES app_user(id)
-      ON DELETE CASCADE
+      ON DELETE RESTRICT
 );
 
 CREATE TABLE IF NOT EXISTS reading (

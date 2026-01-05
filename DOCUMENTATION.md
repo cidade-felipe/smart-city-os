@@ -510,7 +510,7 @@ Registro de auditoria do sistema.
 - `fk_affected_user` - Chave estrangeira para usuário afetado
 - `fk_performed_by_user` - Chave estrangeira para usuário que realizou
 
-## 🗑️ Soft Delete e Reuso de Username
+## Soft Delete e Reuso de Username
 
 ### Visão Geral
 
@@ -1202,6 +1202,191 @@ Nesta seção, descrevemos a arquitetura do sistema, incluindo as extensões e f
 - Dashboard em tempo real
 - Machine learning para previsão de incidentes
 - Integração com sistemas de trânsito municipais
+
+## Soft Delete e Reuso de Username
+
+### Visão Geral
+
+O SmartCityOS implementa um sistema sofisticado de **Soft Delete** que permite a reutilização de usernames enquanto mantém a integridade e histórico dos dados. Esta abordagem garante que os usuários possam criar novas contas com usernames de contas anteriormente excluídas, sem perder dados históricos importantes.
+
+### Funcionalidades Implementadas
+
+#### Soft Delete em Cascata
+
+- **Cidadãos**: Ao deletar um cidadão, automaticamente soft-deleta o app_user associado
+- **Veículos**: Ao deletar um veículo, automaticamente soft-deleta o app_user associado  
+- **Sensores**: Ao deletar um sensor, automaticamente soft-deleta o app_user associado
+- **Cross-Entity**: Username pode ser reutilizado entre diferentes tipos de entidades
+
+#### Views de Dados Ativos
+
+- **`citizen_active`**: Filtra cidadãos não deletados (`deleted_at IS NULL`)
+- **`vehicle_active`**: Filtra veículos não deletados (`deleted_at IS NULL`)
+- **`sensor_active`**: Filtra sensores não deletados (`deleted_at IS NULL`)
+- **`app_user_active`**: Filtra usuários não deletados (`deleted_at IS NULL`)
+
+#### **Validação de Username**
+
+- **Verificação em tempo real**: Sistema verifica disponibilidade na criação de entidades
+- **Cross-entity validation**: Username disponível se não existir em `app_user_active`
+- **Mensagens educativas**: GUI informa quando username está disponível para reuso
+
+### Implementação Técnica
+
+#### Triggers de Soft Delete
+
+```sql
+-- Trigger para cidadãos
+CREATE TRIGGER trg_soft_delete_citizen
+BEFORE DELETE ON citizen
+FOR EACH ROW
+EXECUTE FUNCTION soft_delete_citizen_with_user();
+
+-- Trigger para veículos  
+CREATE TRIGGER trg_soft_delete_vehicle
+BEFORE DELETE ON vehicle
+FOR EACH ROW
+EXECUTE FUNCTION soft_delete_vehicle_with_user();
+
+-- Trigger para sensores
+CREATE TRIGGER trg_soft_delete_sensor
+BEFORE DELETE ON sensor
+FOR EACH ROW
+EXECUTE FUNCTION soft_delete_sensor_with_user();
+```
+
+#### **Funções de Soft Delete**
+
+```sql
+-- Exemplo: soft_delete_citizen_with_user()
+CREATE OR REPLACE FUNCTION soft_delete_citizen_with_user()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Soft delete do app_user associado
+    UPDATE app_user 
+    SET deleted_at = CURRENT_TIMESTAMP,
+        updated_at = CURRENT_TIMESTAMP,
+        allowed = FALSE
+    WHERE id = OLD.app_user_id;
+    
+    -- Soft delete do citizen
+    UPDATE citizen 
+    SET deleted_at = CURRENT_TIMESTAMP,
+        updated_at = CURRENT_TIMESTAMP,
+        allowed = FALSE
+    WHERE id = OLD.id;
+    
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+```
+
+#### Views de Filtragem
+
+```sql
+-- Exemplo: citizen_active
+CREATE VIEW citizen_active AS
+SELECT *
+FROM citizen
+WHERE deleted_at IS NULL;
+```
+
+### Restrições de Segurança
+
+#### **Validação na Consulta SQL**
+
+- **Bloqueio de tabelas base**: GUI impede consultas diretas a `citizen`, `vehicle`, `sensor`, `app_user`
+- **Mensagens educativas**: Sistema informa qual view usar em vez da tabela base
+- **Padrões inteligentes**: Detecta `FROM`, `JOIN`, `AS` e aliases
+- **Exemplos práticos**: Fornece consultas corretas como referência
+
+#### Exemplo de Bloqueio
+
+```
+Bloqueio de tabela 'citizen' não pode ser consultada diretamente!
+
+Use a view 'citizen_active' em vez da tabela base.
+
+Esta restrição garante que dados soft-deletados não sejam exibidos.
+
+Exemplo correto: SELECT * FROM citizen_active;
+```
+
+### Benefícios do Sistema
+
+#### **Para Usuários**
+
+- **Reuso imediato**: Username disponível logo após exclusão
+- **Experiência fluida**: Sem confusão com usernames "em uso"
+- **Dados corretos**: Lista sempre mostra apenas registros ativos
+
+#### **Para Administradores**
+
+- **Integridade preservada**: Histórico completo mantido
+- **Auditoria completa**: Todos os dados rastreados
+- **Backup seguro**: Dados soft-deletados incluídos
+- **Recuperação fácil**: Erros podem ser desfeitos
+
+#### Para o Sistema
+
+- **Performance otimizada**: Views filtram dados eficientemente
+- **Consistência garantida**: Regras aplicadas automaticamente
+- **Escalabilidade**: Sistema cresce mantendo regras
+- **Compliance**: Retenção de dados conforme melhores práticas
+
+### Exemplos de Uso
+
+#### Criar e Deletar Entidade
+
+```python
+# Criar cidadão (username disponível para reuso)
+citizen_id = create_citizen("joao", "senha123", "João Silva", "12345678901")
+
+# Deletar cidadão (soft delete automático)
+delete_citizen(citizen_id)  # Ativa trigger, soft-deleta citizen e app_user
+
+# Criar novo cidadão com mesmo username
+new_citizen_id = create_citizen("joao", "novasenha", "João Santos", "98765432100")
+# Funciona! Username estava disponível
+```
+
+#### Consultas Apenas com Views
+
+```sql
+-- CORRETO: Usa view ativa
+SELECT COUNT(*) FROM citizen_active;
+SELECT * FROM vehicle_active WHERE allowed = TRUE;
+SELECT v.license_plate, c.first_name 
+FROM vehicle_active v 
+JOIN citizen_active c ON v.citizen_id = c.id;
+
+-- INCORRETO: Bloqueado pela GUI
+SELECT COUNT(*) FROM citizen;
+SELECT * FROM vehicle;
+```
+
+### **Melhores Práticas**
+
+#### **Para Desenvolvedores**
+
+- **Sempre usar views** em consultas SQL
+- **Validar usernames** contra `app_user_active`
+- **Considerar soft delete** em migrações
+- **Preservar dados históricos** em backups
+
+#### **Para Administradores**
+
+- **Treinar usuários** sobre soft delete
+- **Monitorar views** para dados consistentes
+- **Verificar triggers** para funcionamento correto
+- **Documentar processos** de recuperação
+
+#### **Para Usuários Finais**
+
+- **Entender que exclusão é lógica** (soft delete)
+- **Username reutilizável** após exclusão
+- **Dados históricos preservados** para segurança
+- **Contatar suporte** para recuperação de dados
 
 ## Licença
 

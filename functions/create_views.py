@@ -1,3 +1,4 @@
+import re
 def create_all_views(conn_info, file_path):
     """
     Create database views for Smart City OS

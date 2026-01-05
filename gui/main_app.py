@@ -213,6 +213,7 @@ class SmartCityOSGUI:
             ("💰 Multas", self.show_fines, "normal"),
             ("📈 Estatísticas", self.show_statistics, "normal"),
             ("🔍 Consultas SQL", self.show_sql_console, "secondary"),
+            ("⚙️ Configurações", self.show_settings, "secondary"),
         ]
         
         for text, command, style_type in buttons_data:
@@ -1085,7 +1086,7 @@ class SmartCityOSGUI:
                                u.username, c.first_name, c.last_name
                         FROM vehicle_active v
                         JOIN app_user u ON v.app_user_id = u.id
-                        LEFT JOIN citizen c ON v.citizen_id = c.id
+                        LEFT JOIN citizen_active c ON v.citizen_id = c.id
                         ORDER BY v.license_plate
                     """)
                     vehicles = cur.fetchall()
@@ -4466,7 +4467,7 @@ class SmartCityOSGUI:
                        COUNT(CASE WHEN allowed = TRUE THEN 1 END) as with_access,
                        COALESCE(SUM(debt), 0) as total_debt,
                        COALESCE(AVG(debt), 0) as avg_debt
-                FROM citizen
+                FROM citizen_active
             """)
             stats['citizens'] = cur.fetchone()
         except Exception as e:
@@ -4480,7 +4481,7 @@ class SmartCityOSGUI:
                        COUNT(CASE WHEN allowed = TRUE THEN 1 END) as active,
                        COUNT(CASE WHEN allowed = FALSE THEN 1 END) as blocked,
                        COUNT(DISTINCT citizen_id) as unique_owners
-                FROM vehicle
+                FROM vehicle_active
             """)
             stats['vehicles'] = cur.fetchone()
         except Exception as e:
@@ -5271,6 +5272,36 @@ class SmartCityOSGUI:
         if not (first_line_upper.startswith('SELECT') or first_line_upper.startswith('WITH')):
             messagebox.showerror("Erro", "Apenas consultas SELECT são permitidas no console SQL!\n\nUse SELECT para consultar dados.")
             return
+        
+        # VALIDAÇÃO: Verificar se está usando views para tabelas principais
+        # Tabelas que devem ser acessadas apenas via views
+        restricted_tables = {
+            'citizen': 'citizen_active',
+            'vehicle': 'vehicle_active', 
+            'sensor': 'sensor_active',
+            'app_user': 'app_user_active'
+        }
+        
+        # Padrões para detectar uso de tabelas restritas
+        for table, view in restricted_tables.items():
+            # Detectar FROM table ou JOIN table (mas não FROM view ou JOIN view)
+            patterns = [
+                rf'\bFROM\s+{table}\b(?!\s*\()',  # FROM table (não seguido de parentese)
+                rf'\bJOIN\s+{table}\b(?!\s*\()',   # JOIN table (não seguido de parentese)
+                rf'\b{table}\s+AS\b',              # table AS
+                rf'\b{table}\s+\w+\s*,',           # table alias com vírgula
+            ]
+            
+            for pattern in patterns:
+                if re.search(pattern, sql_clean, re.IGNORECASE):
+                    messagebox.showerror(
+                        "Erro de Acesso Restrito", 
+                        f"❌ Tabela '{table}' não pode ser consultada diretamente!\n\n"
+                        f"📋 Use a view '{view}' em vez da tabela base.\n\n"
+                        f"🔒 Esta restrição garante que dados soft-deletados não sejam exibidos.\n\n"
+                        f"✅ Exemplo correto: SELECT * FROM {view};"
+                    )
+                    return
             
         try:
             # Garantir que a conexão está válida
@@ -5348,6 +5379,509 @@ class SmartCityOSGUI:
             self.results_info.config(text=f"❌ Erro: {str(e)}")
             messagebox.showerror("Erro", f"Erro ao executar consulta: {str(e)}\n\n🔄 Rollback automático realizado!")
             
+    def show_settings(self):
+        """Exibe a aba de configurações do sistema"""
+        self.clear_content()
+        
+        # Header estilizado
+        header_frame = tk.Frame(self.content_frame, bg=self.styles.colors['card'])
+        header_frame.pack(fill=tk.X, padx=0, pady=(20, 10))
+        
+        title_label = tk.Label(header_frame, text="⚙️ Configurações do Sistema", 
+                              bg=self.styles.colors['card'], fg=self.styles.colors['text_primary'],
+                              font=self.styles.fonts['title'])
+        title_label.pack(side=tk.LEFT, padx=20, pady=15)
+        
+        # Botão de salvar
+        save_btn = tk.Button(header_frame, text="💾 Salvar Configurações", command=self.save_settings,
+                            bg=self.styles.colors['success'], fg=self.styles.colors['white'],
+                            font=self.styles.fonts['button'], relief='flat',
+                            padx=15, pady=8, cursor='hand2')
+        save_btn.pack(side=tk.RIGHT, padx=20, pady=15)
+        
+        # Container principal com scrollbar
+        main_container = tk.Frame(self.content_frame, bg=self.styles.colors['background'])
+        main_container.pack(fill=tk.BOTH, expand=True, padx=0, pady=0)
+        
+        # Canvas e Scrollbar
+        canvas = tk.Canvas(main_container, bg=self.styles.colors['background'], highlightthickness=0)
+        scrollbar = ttk.Scrollbar(main_container, orient="vertical", command=canvas.yview)
+        scrollable_frame = tk.Frame(canvas, bg=self.styles.colors['background'])
+        
+        # Configurar scrollbar
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        
+        # Criar window no canvas que ocupa toda largura
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw", width=10000)
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        # Empacotar canvas e scrollbar
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        # Atualizar largura do scrollable_frame para ocupar canvas inteiro
+        def update_canvas_width(event=None):
+            canvas_width = canvas.winfo_width()
+            if canvas_width > 1:  # Só atualiza se canvas tiver largura válida
+                canvas.itemconfig(canvas.find_all()[0], width=canvas_width)
+                # Forçar atualização dos LabelFrames
+                scrollable_frame.update_idletasks()
+        
+        # Agendar atualização após a janela ser exibida
+        main_container.after(100, update_canvas_width)
+        main_container.bind('<Configure>', lambda e: main_container.after(50, update_canvas_width))
+        
+        # Carregar configurações salvas
+        self.load_settings()
+        
+        # Funções para mouse wheel
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+        
+        def _bind_to_mousewheel(event):
+            canvas.bind_all("<MouseWheel>", _on_mousewheel)
+        
+        def _unbind_from_mousewheel(event):
+            canvas.unbind_all("<MouseWheel>")
+        
+        canvas.bind('<Enter>', _bind_to_mousewheel)
+        canvas.bind('<Leave>', _unbind_from_mousewheel)
+        
+        # Seção de Configurações do Banco
+        db_frame = tk.LabelFrame(scrollable_frame, text="🗄️ Configurações do Banco de Dados", 
+                                 bg=self.styles.colors['card'], fg=self.styles.colors['text_primary'],
+                                 font=self.styles.fonts['heading'], relief='solid', bd=1)
+        db_frame.pack(fill=tk.X, pady=(0, 15))
+        
+        # Configurações do banco em grid
+        db_grid = tk.Frame(db_frame, bg=self.styles.colors['card'])
+        db_grid.pack(fill=tk.X, padx=10, pady=8)
+        
+        # Host do Banco
+        tk.Label(db_grid, text="Host:", bg=self.styles.colors['card'], 
+                fg=self.styles.colors['text_primary'], font=self.styles.fonts['normal']).grid(row=0, column=0, sticky='w', pady=2)
+        self.host_entry = tk.Entry(db_grid, bg=self.styles.colors['white'], 
+                                  fg=self.styles.colors['text_primary'], font=self.styles.fonts['normal'])
+        self.host_entry.grid(row=0, column=1, sticky='ew', padx=(10, 0), pady=2)
+        
+        # Porta do Banco
+        tk.Label(db_grid, text="Porta:", bg=self.styles.colors['card'], 
+                fg=self.styles.colors['text_primary'], font=self.styles.fonts['normal']).grid(row=1, column=0, sticky='w', pady=2)
+        self.port_entry = tk.Entry(db_grid, bg=self.styles.colors['white'], 
+                                  fg=self.styles.colors['text_primary'], font=self.styles.fonts['normal'], width=10)
+        self.port_entry.grid(row=1, column=1, sticky='w', padx=(10, 0), pady=2)
+        
+        # Nome do Banco
+        tk.Label(db_grid, text="Banco:", bg=self.styles.colors['card'], 
+                fg=self.styles.colors['text_primary'], font=self.styles.fonts['normal']).grid(row=2, column=0, sticky='w', pady=2)
+        self.dbname_entry = tk.Entry(db_grid, bg=self.styles.colors['white'], 
+                                    fg=self.styles.colors['text_primary'], font=self.styles.fonts['normal'])
+        self.dbname_entry.grid(row=2, column=1, sticky='ew', padx=(10, 0), pady=2)
+        
+        db_grid.columnconfigure(1, weight=1)
+        
+        # Seção de Preferências da Interface
+        ui_frame = tk.LabelFrame(scrollable_frame, text="🎨 Preferências da Interface", 
+                                 bg=self.styles.colors['card'], fg=self.styles.colors['text_primary'],
+                                 font=self.styles.fonts['heading'], relief='solid', bd=1)
+        ui_frame.pack(fill=tk.X, pady=(0, 15))
+        
+        # Preferências em grid
+        ui_grid = tk.Frame(ui_frame, bg=self.styles.colors['card'])
+        ui_grid.pack(fill=tk.X, padx=10, pady=8)
+        
+        # Tema da Interface
+        tk.Label(ui_grid, text="Tema:", bg=self.styles.colors['card'], 
+                fg=self.styles.colors['text_primary'], font=self.styles.fonts['normal']).grid(row=0, column=0, sticky='w', pady=2)
+        
+        self.theme_var = tk.StringVar(value="Escuro")
+        theme_options = ["Escuro", "Claro", "Azul"]
+        self.theme_combo = ttk.Combobox(ui_grid, textvariable=self.theme_var, 
+                                        values=theme_options, state="readonly", width=15)
+        self.theme_combo.grid(row=0, column=1, sticky='w', padx=(10, 0), pady=2)
+        
+        # Idioma
+        tk.Label(ui_grid, text="Idioma:", bg=self.styles.colors['card'], 
+                fg=self.styles.colors['text_primary'], font=self.styles.fonts['normal']).grid(row=1, column=0, sticky='w', pady=2)
+        
+        self.lang_var = tk.StringVar(value="Português")
+        lang_options = ["Português", "English", "Español"]
+        self.lang_combo = ttk.Combobox(ui_grid, textvariable=self.lang_var, 
+                                       values=lang_options, state="readonly", width=15)
+        self.lang_combo.grid(row=1, column=1, sticky='w', padx=(10, 0), pady=2)
+        
+        # Seção de Sistema
+        system_frame = tk.LabelFrame(scrollable_frame, text="🔧 Configurações do Sistema", 
+                                    bg=self.styles.colors['card'], fg=self.styles.colors['text_primary'],
+                                    font=self.styles.fonts['heading'], relief='solid', bd=1)
+        system_frame.pack(fill=tk.X, pady=(0, 15))
+        
+        # Sistema em grid
+        system_grid = tk.Frame(system_frame, bg=self.styles.colors['card'])
+        system_grid.pack(fill=tk.X, padx=10, pady=8)
+        
+        # Auto-save
+        self.autosave_var = tk.BooleanVar(value=True)
+        autosave_check = tk.Checkbutton(system_grid, text="Auto-save automático", 
+                                       variable=self.autosave_var, bg=self.styles.colors['card'],
+                                       fg=self.styles.colors['text_primary'], font=self.styles.fonts['normal'],
+                                       selectcolor=self.styles.colors['primary'])
+        autosave_check.grid(row=0, column=0, sticky='w', pady=2)
+        
+        # Notificações
+        self.notifications_var = tk.BooleanVar(value=True)
+        notifications_check = tk.Checkbutton(system_grid, text="Habilitar notificações", 
+                                           variable=self.notifications_var, bg=self.styles.colors['card'],
+                                           fg=self.styles.colors['text_primary'], font=self.styles.fonts['normal'],
+                                           selectcolor=self.styles.colors['primary'])
+        notifications_check.grid(row=1, column=0, sticky='w', pady=2)
+        
+        # Seção de Backup
+        backup_frame = tk.LabelFrame(scrollable_frame, text="💾 Backup e Restauração", 
+                                     bg=self.styles.colors['card'], fg=self.styles.colors['text_primary'],
+                                     font=self.styles.fonts['heading'], relief='solid', bd=1)
+        backup_frame.pack(fill=tk.X, pady=(0, 15))
+        
+        # Botões de backup
+        backup_buttons_frame = tk.Frame(backup_frame, bg=self.styles.colors['card'])
+        backup_buttons_frame.pack(fill=tk.X, padx=10, pady=8)
+        
+        backup_btn = tk.Button(backup_buttons_frame, text="📦 Fazer Backup", command=self.backup_database,
+                              bg=self.styles.colors['primary'], fg=self.styles.colors['white'],
+                              font=self.styles.fonts['button'], relief='flat',
+                              padx=12, pady=6, cursor='hand2')
+        backup_btn.pack(side=tk.LEFT, padx=(0, 8))
+        
+        restore_btn = tk.Button(backup_buttons_frame, text="📂 Restaurar Backup", command=self.restore_database,
+                               bg=self.styles.colors['secondary'], fg=self.styles.colors['white'],
+                               font=self.styles.fonts['button'], relief='flat',
+                               padx=12, pady=6, cursor='hand2')
+        restore_btn.pack(side=tk.LEFT)
+        
+        # Informações do Sistema
+        info_frame = tk.LabelFrame(scrollable_frame, text="ℹ️ Informações do Sistema", 
+                                   bg=self.styles.colors['card'], fg=self.styles.colors['text_primary'],
+                                   font=self.styles.fonts['heading'], relief='solid', bd=1)
+        info_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        info_text = f"""Versão: SmartCityOS v1.0.0
+Python: {sys.version.split()[0]}
+PostgreSQL: 18.0
+Última atualização: {datetime.now().strftime('%d/%m/%Y %H:%M')}"""
+        
+        info_label = tk.Label(info_frame, text=info_text, bg=self.styles.colors['card'], 
+                             fg=self.styles.colors['text_secondary'], font=self.styles.fonts['small'],
+                             justify=tk.LEFT)
+        info_label.pack(padx=10, pady=8)
+    
+    def load_settings(self):
+        """Carrega as configurações salvas do arquivo settings.json"""
+        try:
+            import json
+            import os
+            
+            if os.path.exists('settings.json'):
+                with open('settings.json', 'r') as f:
+                    settings = json.load(f)
+                
+                # Carregar configurações do banco
+                if 'database' in settings:
+                    db_config = settings['database']
+                    if hasattr(self, 'host_entry'):
+                        self.host_entry.delete(0, tk.END)
+                        self.host_entry.insert(0, db_config.get('host', 'localhost'))
+                    
+                    if hasattr(self, 'port_entry'):
+                        self.port_entry.delete(0, tk.END)
+                        self.port_entry.insert(0, db_config.get('port', '5432'))
+                    
+                    if hasattr(self, 'dbname_entry'):
+                        self.dbname_entry.delete(0, tk.END)
+                        self.dbname_entry.insert(0, db_config.get('dbname', 'smart_city_os'))
+                
+                # Carregar configurações da interface
+                if 'ui' in settings:
+                    ui_config = settings['ui']
+                    if hasattr(self, 'theme_var'):
+                        self.theme_var.set(ui_config.get('theme', 'Escuro'))
+                    
+                    if hasattr(self, 'lang_var'):
+                        self.lang_var.set(ui_config.get('language', 'Português'))
+                
+                # Carregar configurações do sistema
+                if 'system' in settings:
+                    system_config = settings['system']
+                    if hasattr(self, 'autosave_var'):
+                        self.autosave_var.set(system_config.get('autosave', True))
+                    
+                    if hasattr(self, 'notifications_var'):
+                        self.notifications_var.set(system_config.get('notifications', True))
+                
+        except Exception as e:
+            print(f"Erro ao carregar configurações: {e}")
+            # Continuar com valores padrão
+        
+    def save_settings(self):
+        """Salva as configurações do sistema"""
+        try:
+            # Coletar configurações
+            settings = {
+                'database': {
+                    'host': self.host_entry.get(),
+                    'port': self.port_entry.get(),
+                    'dbname': self.dbname_entry.get()
+                },
+                'ui': {
+                    'theme': self.theme_var.get(),
+                    'language': self.lang_var.get()
+                },
+                'system': {
+                    'autosave': self.autosave_var.get(),
+                    'notifications': self.notifications_var.get()
+                }
+            }
+            
+            # Salvar em arquivo JSON
+            import json
+            with open('settings.json', 'w') as f:
+                json.dump(settings, f, indent=2)
+            
+            messagebox.showinfo("Sucesso", "✅ Configurações salvas com sucesso!")
+            
+        except Exception as e:
+            messagebox.showerror("Erro", f"❌ Erro ao salvar configurações: {str(e)}")
+    
+    def backup_database(self):
+        """Faz backup do banco de dados usando SQL nativo"""
+        try:
+            if not self.connected or self.conn is None:
+                messagebox.showwarning("Aviso", "Conecte-se ao banco de dados primeiro!")
+                return
+            
+            # Pedir local para salvar backup
+            from tkinter import filedialog
+            backup_file = filedialog.asksaveasfilename(
+                title="Salvar Backup",
+                defaultextension=".sql",
+                filetypes=[("Arquivos SQL", "*.sql"), ("Todos os Arquivos", "*.*")]
+            )
+            
+            if not backup_file:
+                return
+            
+            messagebox.showinfo("Backup", "🔄 Iniciando backup do banco de dados...")
+            
+            try:
+                # Garantir que a conexão está válida
+                if self.conn.closed:
+                    messagebox.showerror("Erro", "Conexão com banco de dados foi fechada. Conecte-se novamente.")
+                    return
+                
+                # Criar cursor
+                cur = self.conn.cursor()
+                
+                # Obter lista de todas as tabelas
+                cur.execute("""
+                    SELECT table_name 
+                    FROM information_schema.tables 
+                    WHERE table_schema = 'public' 
+                    AND table_type = 'BASE TABLE'
+                    ORDER BY table_name
+                """)
+                tables = [row[0] for row in cur.fetchall()]
+                
+                # Escrever backup em arquivo SQL
+                with open(backup_file, 'w', encoding='utf-8') as f:
+                    f.write(f"-- SmartCityOS Database Backup\n")
+                    f.write(f"-- Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                    f.write(f"-- Database: {self.dbname_entry.get() if hasattr(self, 'dbname_entry') else 'smart_city_os'}\n")
+                    f.write(f"-- Total tables: {len(tables)}\n\n")
+                    
+                    # Para cada tabela, fazer dump dos dados
+                    for table in tables:
+                        f.write(f"--\n-- Data for table: {table}\n--\n\n")
+                        
+                        try:
+                            # Obter estrutura da tabela
+                            cur.execute(f"""
+                                SELECT column_name, data_type 
+                                FROM information_schema.columns 
+                                WHERE table_name = '{table}' 
+                                AND table_schema = 'public'
+                                ORDER BY ordinal_position
+                            """)
+                            columns = [row[0] for row in cur.fetchall()]
+                            
+                            if not columns:
+                                f.write(f"-- Table {table} has no columns or doesn't exist\n\n")
+                                continue
+                            
+                            # Obter dados da tabela
+                            cur.execute(f"SELECT * FROM {table}")
+                            rows = cur.fetchall()
+                            
+                            if rows:
+                                # Gerar INSERT statements
+                                for row in rows:
+                                    # Escapar valores para SQL
+                                    values = []
+                                    for value in row:
+                                        if value is None:
+                                            values.append('NULL')
+                                        elif isinstance(value, str):
+                                            # Escapar aspas simples
+                                            escaped_value = value.replace("'", "''")
+                                            values.append(f"'{escaped_value}'")
+                                        elif isinstance(value, bool):
+                                            values.append('TRUE' if value else 'FALSE')
+                                        elif isinstance(value, (int, float)):
+                                            values.append(str(value))
+                                        else:
+                                            # Para outros tipos (JSON, etc.)
+                                            if isinstance(value, dict):
+                                                import json
+                                                escaped_json = json.dumps(value).replace("'", "''")
+                                                values.append(f"'{escaped_json}'")
+                                            else:
+                                                values.append(f"'{str(value)}'")
+                                    
+                                    insert_sql = f"INSERT INTO {table} ({', '.join(columns)}) VALUES ({', '.join(values)});"
+                                    f.write(insert_sql + "\n")
+                                
+                                f.write(f"\n-- {len(rows)} rows backed up for table {table}\n\n")
+                            else:
+                                f.write(f"-- Table {table} is empty\n\n")
+                                
+                        except Exception as table_error:
+                            f.write(f"-- Error backing up table {table}: {str(table_error)}\n\n")
+                            continue
+                
+                # Commit da transação
+                self.conn.commit()
+                
+                messagebox.showinfo("Backup", f"✅ Backup concluído com sucesso!\n\nArquivo: {backup_file}\n\nTabelas backup: {len(tables)}")
+                
+            except Exception as db_error:
+                # Rollback em caso de erro
+                try:
+                    self.conn.rollback()
+                except:
+                    pass
+                messagebox.showerror("Erro", f"❌ Erro ao acessar banco de dados: {str(db_error)}")
+                
+        except Exception as e:
+            messagebox.showerror("Erro", f"❌ Erro ao fazer backup: {str(e)}")
+    
+    def restore_database(self):
+        """Restaura o banco de dados usando SQL nativo"""
+        try:
+            if not self.connected or self.conn is None:
+                messagebox.showwarning("Aviso", "Conecte-se ao banco de dados primeiro!")
+                return
+            
+            # Pedir arquivo de backup
+            from tkinter import filedialog
+            backup_file = filedialog.askopenfilename(
+                title="Selecionar Arquivo de Backup",
+                filetypes=[("Arquivos SQL", "*.sql"), ("Todos os Arquivos", "*.*")]
+            )
+            
+            if not backup_file:
+                return
+            
+            # Confirmar restauração
+            if not messagebox.askyesno(
+                "Confirmar Restauração", 
+                "⚠️ ATENÇÃO: Esta operação irá substituir todos os dados atuais!\n\nDeseja continuar?"
+            ):
+                return
+            
+            messagebox.showinfo("Restauração", "🔄 Iniciando restauração do banco de dados...")
+            
+            try:
+                # Garantir que a conexão está válida
+                if self.conn.closed:
+                    messagebox.showerror("Erro", "Conexão com banco de dados foi fechada. Conecte-se novamente.")
+                    return
+                
+                # Ler arquivo de backup
+                with open(backup_file, 'r', encoding='utf-8') as f:
+                    sql_content = f.read()
+                
+                # Criar cursor
+                cur = self.conn.cursor()
+                
+                # Dividir o conteúdo em comandos SQL individuais
+                sql_commands = []
+                current_command = ""
+                
+                for line in sql_content.split('\n'):
+                    line = line.strip()
+                    
+                    # Ignorar comentários e linhas vazias
+                    if line.startswith('--') or not line:
+                        continue
+                    
+                    # Adicionar linha ao comando atual
+                    current_command += line + " "
+                    
+                    # Se a linha termina com ;, comando está completo
+                    if line.endswith(';'):
+                        sql_commands.append(current_command.strip())
+                        current_command = ""
+                
+                # Executar cada comando SQL
+                success_count = 0
+                error_count = 0
+                errors = []
+                
+                for i, command in enumerate(sql_commands):
+                    if not command.strip():
+                        continue
+                    
+                    try:
+                        cur.execute(command)
+                        success_count += 1
+                    except Exception as cmd_error:
+                        error_count += 1
+                        errors.append(f"Comando {i+1}: {str(cmd_error)}")
+                        # Continuar com outros comandos mesmo se um falhar
+                        continue
+                
+                # Commit da transação
+                self.conn.commit()
+                
+                # Mostrar resultado
+                result_msg = f"✅ Restauração concluída!\n\n"
+                result_msg += f"Comandos executados com sucesso: {success_count}\n"
+                result_msg += f"Comandos com erro: {error_count}\n"
+                result_msg += f"Arquivo: {backup_file}"
+                
+                if errors and len(errors) <= 5:  # Mostrar até 5 erros
+                    result_msg += f"\n\nErros encontrados:\n" + "\n".join(errors[:5])
+                elif errors:
+                    result_msg += f"\n\nErros encontrados: {len(errors)} (primeiros 5 mostrados)"
+                    result_msg += "\n" + "\n".join(errors[:5])
+                
+                if error_count == 0:
+                    messagebox.showinfo("Restauração", result_msg + "\n\n🎉 Todos os dados foram restaurados com sucesso!")
+                else:
+                    messagebox.showwarning("Restauração", result_msg + "\n\n⚠️ Alguns comandos falharam, mas a restauração foi concluída.")
+                
+            except Exception as db_error:
+                # Rollback em caso de erro
+                try:
+                    self.conn.rollback()
+                except:
+                    pass
+                messagebox.showerror("Erro", f"❌ Erro ao acessar banco de dados: {str(db_error)}")
+                
+        except Exception as e:
+            messagebox.showerror("Erro", f"❌ Erro ao restaurar: {str(e)}")
+            
     def clear_sql(self):
         """Limpa o editor SQL completamente"""
         try:
@@ -5385,9 +5919,12 @@ class SmartCityOSGUI:
         examples = [
             "SELECT COUNT(*) as total_citizens FROM citizen_active;",
             "SELECT * FROM vehicle_active WHERE allowed = TRUE;",
-            "SELECT v.license_plate, c.wallet_balance FROM vehicle_active v JOIN citizen_active c ON v.citizen_id = c.id;",
+            "SELECT v.license_plate, c.first_name FROM vehicle_active v JOIN citizen_active c ON v.citizen_id = c.id;",
             "SELECT status, COUNT(*) FROM fine GROUP BY status;",
-            "SELECT type, COUNT(*) FROM sensor_active GROUP BY type ORDER BY COUNT DESC;"
+            "SELECT type, COUNT(*) FROM sensor_active GROUP BY type ORDER BY COUNT DESC;",
+            "SELECT username, created_at FROM app_user_active ORDER BY created_at DESC LIMIT 5;",
+            "SELECT * FROM citizen_active WHERE debt > 0 ORDER BY debt DESC;",
+            "SELECT s.type, s.location, COUNT(r.id) as readings FROM sensor_active s LEFT JOIN reading r ON s.id = r.sensor_id GROUP BY s.id;"
         ]
         
         try:
@@ -5739,7 +6276,7 @@ class SmartCityOSGUI:
                             SELECT c.id, c.first_name, c.last_name, c.email, c.cpf, c.phone,
                                    c.address, c.birth_date, c.wallet_balance, c.debt, c.allowed,
                                    u.username, c.created_at
-                            FROM citizen c
+                            FROM citizen_active c
                             JOIN app_user u ON c.app_user_id = u.id
                             WHERE c.cpf = %s
                         """, (cpf_clean,))
@@ -6027,9 +6564,9 @@ class SmartCityOSGUI:
                             SELECT v.id, v.license_plate, v.model, v.year, v.allowed,
                                    u.username, c.first_name, c.last_name, c.cpf,
                                    v.created_at
-                            FROM vehicle v
+                            FROM vehicle_active v
                             JOIN app_user u ON v.app_user_id = u.id
-                            LEFT JOIN citizen c ON v.citizen_id = c.id
+                            LEFT JOIN citizen_active c ON v.citizen_id = c.id
                             WHERE v.license_plate = %s
                         """, (plate,))
                         vehicle = cur.fetchone()
