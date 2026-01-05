@@ -3,7 +3,7 @@ import sys
 sys.path.append('functions')
 from conect_db import connect_to_db
 
-def drop_and_recreate_all():
+def drop_and_recreate_all(schema):
     """
     Dropa tudo e recria do zero - versão final e completa
     """
@@ -15,21 +15,21 @@ def drop_and_recreate_all():
                 print("=" * 60)
                 
                 # 1. Dropar schema public completamente
-                print("1️⃣ Dropando schema public...")
-                cur.execute("DROP SCHEMA public CASCADE")
+                print("1️⃣ Dropando schema {}...".format(schema))
+                cur.execute("DROP SCHEMA {} CASCADE".format(schema))
                 conn.commit()
-                print("   ✅ Schema public dropado")
+                print("   ✅ Schema {} dropado".format(schema))
                 
                 # 2. Recriar schema public
-                print("2️⃣ Recriando schema public...")
-                cur.execute("CREATE SCHEMA public")
+                print("2️⃣ Recriando schema {}...".format(schema))
+                cur.execute("CREATE SCHEMA {}".format(schema))
                 conn.commit()
-                print("   ✅ Schema public recriado")
+                print("   ✅ Schema {} recriado".format(schema))
                 
                 # 3. Recriar tabelas
                 print("3️⃣ Recriando tabelas...")
                 with open('sql/create_tables.sql', 'r', encoding='utf-8') as f:
-                    tables_sql = f.read()
+                    tables_sql = f.read().replace('SCHEMA_NAME', schema)
                 cur.execute(tables_sql)
                 conn.commit()
                 print("   ✅ Tabelas recriadas")
@@ -37,7 +37,7 @@ def drop_and_recreate_all():
                 # 4. Recriar funções
                 print("4️⃣ Recriando funções...")
                 with open('sql/trigger_functions.sql', 'r', encoding='utf-8') as f:
-                    functions_sql = f.read()
+                    functions_sql = f.read().replace('SCHEMA_NAME', schema)
                 cur.execute(functions_sql)
                 conn.commit()
                 print("   ✅ Funções recriadas")
@@ -45,7 +45,7 @@ def drop_and_recreate_all():
                 # 5. Recriar triggers
                 print("5️⃣ Recriando triggers...")
                 with open('sql/triggers.sql', 'r', encoding='utf-8') as f:
-                    triggers_sql = f.read()
+                    triggers_sql = f.read().replace('SCHEMA_NAME', schema)
                 cur.execute(triggers_sql)
                 conn.commit()
                 print("   ✅ Triggers recriados")
@@ -53,7 +53,7 @@ def drop_and_recreate_all():
                 # 6. Recriar views
                 print("6️⃣ Recriando views...")
                 with open('sql/wiews.sql', 'r', encoding='utf-8') as f:
-                    views_sql = f.read()
+                    views_sql = f.read().replace('SCHEMA_NAME', schema)
                 cur.execute(views_sql)
                 conn.commit()
                 print("   ✅ Views recriadas")
@@ -61,7 +61,7 @@ def drop_and_recreate_all():
                 # 7. Recriar índices
                 print("7️⃣ Recriando índices...")
                 with open('sql/indexes.sql', 'r', encoding='utf-8') as f:
-                    indexes_sql = f.read()
+                    indexes_sql = f.read().replace('SCHEMA_NAME', schema)
                 cur.execute(indexes_sql)
                 conn.commit()
                 print("   ✅ Índices recriados")
@@ -73,9 +73,9 @@ def drop_and_recreate_all():
                 cur.execute("""
                     SELECT table_name 
                     FROM information_schema.tables 
-                    WHERE table_schema = 'public' 
+                    WHERE table_schema = '{}'
                     ORDER BY table_name
-                """)
+                """.format(schema))
                 tables = [row[0] for row in cur.fetchall()]
                 print(f"   📋 Tabelas criadas: {len(tables)}")
                 for table in tables:
@@ -85,9 +85,9 @@ def drop_and_recreate_all():
                 cur.execute("""
                     SELECT trigger_name, event_object_table 
                     FROM information_schema.triggers 
-                    WHERE trigger_schema = 'public'
+                    WHERE trigger_schema = '{}'
                     ORDER BY event_object_table, trigger_name
-                """)
+                """.format(schema))
                 triggers = cur.fetchall()
                 print(f"   ⚡ Triggers criados: {len(triggers)}")
                 for trigger in triggers:
@@ -97,9 +97,9 @@ def drop_and_recreate_all():
                 cur.execute("""
                     SELECT table_name 
                     FROM information_schema.views 
-                    WHERE table_schema = 'public' 
+                    WHERE table_schema = '{}'
                     ORDER BY table_name
-                """)
+                """.format(schema))
                 views = [row[0] for row in cur.fetchall()]
                 print(f"   👁️ Views criadas: {len(views)}")
                 for view in views:
@@ -131,6 +131,6 @@ if __name__ == "__main__":
     
     if confirm.upper() == 'SIM':
         print("\n🔄 Iniciando processo...")
-        drop_and_recreate_all()
+        drop_and_recreate_all('db')
     else:
         print("❌ Operação cancelada pelo usuário.")

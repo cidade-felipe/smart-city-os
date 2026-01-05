@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION apply_fine_to_wallet()
+CREATE OR REPLACE FUNCTION SCHEMA_NAME.apply_fine_to_wallet()
 RETURNS TRIGGER AS $$
 DECLARE
     v_balance NUMERIC(10,2);
@@ -31,7 +31,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE OR REPLACE FUNCTION apply_fine_payment()
+CREATE OR REPLACE FUNCTION SCHEMA_NAME.apply_fine_payment()
 RETURNS TRIGGER AS $$
 DECLARE
     v_citizen_id INTEGER;
@@ -71,7 +71,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE OR REPLACE FUNCTION audit_log_generic()
+CREATE OR REPLACE FUNCTION SCHEMA_NAME.audit_log_generic()
 RETURNS TRIGGER AS $$
 DECLARE
     v_app_user_id INTEGER;
@@ -102,7 +102,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 
-CREATE OR REPLACE FUNCTION soft_delete_generic()
+CREATE OR REPLACE FUNCTION SCHEMA_NAME.soft_delete_generic()
 RETURNS TRIGGER AS $$
 BEGIN
     PERFORM set_config('app.soft_delete', 'true', true);
@@ -119,7 +119,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE OR REPLACE FUNCTION block_update_deleted_generic()
+CREATE OR REPLACE FUNCTION SCHEMA_NAME.block_update_deleted_generic()
 RETURNS TRIGGER AS $$
 BEGIN
     IF current_setting('app.soft_delete', true) = 'true' THEN
@@ -137,7 +137,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 
-CREATE OR REPLACE FUNCTION block_update_deleted_row()
+CREATE OR REPLACE FUNCTION SCHEMA_NAME.block_update_deleted_row()
 RETURNS TRIGGER AS $$
 BEGIN
     IF OLD.deleted_at IS NULL AND NEW.deleted_at IS NOT NULL THEN
@@ -154,7 +154,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE OR REPLACE FUNCTION soft_delete_citizen_with_user()
+CREATE OR REPLACE FUNCTION SCHEMA_NAME.soft_delete_citizen_with_user()
 RETURNS TRIGGER AS $$
 BEGIN
     -- Soft delete do app_user associado
@@ -175,7 +175,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE OR REPLACE FUNCTION soft_delete_vehicle_with_user()
+CREATE OR REPLACE FUNCTION SCHEMA_NAME.soft_delete_vehicle_with_user()
 RETURNS TRIGGER AS $$
 BEGIN
     -- Soft delete do app_user associado
@@ -196,7 +196,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE OR REPLACE FUNCTION soft_delete_sensor_with_user()
+CREATE OR REPLACE FUNCTION SCHEMA_NAME.soft_delete_sensor_with_user()
 RETURNS TRIGGER AS $$
 BEGIN
 -- Soft delete do app_user associado
@@ -217,7 +217,7 @@ RETURN NULL;
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE OR REPLACE FUNCTION prevent_delete_citizen_with_pending_fines()
+CREATE OR REPLACE FUNCTION SCHEMA_NAME.prevent_delete_citizen_with_pending_fines()
 RETURNS TRIGGER AS $$
 DECLARE
     v_pending_count INTEGER;
@@ -238,7 +238,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE OR REPLACE FUNCTION cancel_fines_when_citizen_deleted()
+CREATE OR REPLACE FUNCTION SCHEMA_NAME.cancel_fines_when_citizen_deleted()
 RETURNS TRIGGER AS $$
 BEGIN
     UPDATE fine

@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS notification (
+CREATE TABLE IF NOT EXISTS SCHEMA_NAME.notification (
     id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     type VARCHAR(50) NOT NULL,
     message TEXT NOT NULL,
@@ -6,13 +6,7 @@ CREATE TABLE IF NOT EXISTS notification (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS payment_method (
-    id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    name VARCHAR(50) UNIQUE NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS app_user (
+CREATE TABLE IF NOT EXISTS SCHEMA_NAME.app_user (
     id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     username VARCHAR(255) NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
@@ -23,7 +17,7 @@ CREATE TABLE IF NOT EXISTS app_user (
 );
 
 
-CREATE TABLE IF NOT EXISTS citizen (
+CREATE TABLE IF NOT EXISTS SCHEMA_NAME.citizen (
     id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     app_user_id INTEGER NOT NULL,
     first_name VARCHAR(100) NOT NULL,
@@ -47,11 +41,11 @@ CREATE TABLE IF NOT EXISTS citizen (
     CONSTRAINT chk_debt CHECK (debt >= 0),
     CONSTRAINT fk_user
       FOREIGN KEY (app_user_id)
-      REFERENCES app_user(id)
+      REFERENCES SCHEMA_NAME.app_user(id)
       ON DELETE RESTRICT
 );
 
-CREATE TABLE IF NOT EXISTS sensor (
+CREATE TABLE IF NOT EXISTS SCHEMA_NAME.sensor (
     id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     app_user_id INTEGER NOT NULL,
     model VARCHAR(255) NOT NULL,
@@ -64,11 +58,11 @@ CREATE TABLE IF NOT EXISTS sensor (
     deleted_at TIMESTAMP,
     CONSTRAINT fk_user
       FOREIGN KEY (app_user_id)
-      REFERENCES app_user(id)
+      REFERENCES SCHEMA_NAME.app_user(id)
       ON DELETE RESTRICT
 );
 
-CREATE TABLE IF NOT EXISTS vehicle (
+CREATE TABLE IF NOT EXISTS SCHEMA_NAME.vehicle (
     id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     app_user_id INTEGER NOT NULL,
     license_plate VARCHAR(12) NOT NULL,
@@ -81,15 +75,15 @@ CREATE TABLE IF NOT EXISTS vehicle (
     deleted_at TIMESTAMP,
     CONSTRAINT fk_citizen
       FOREIGN KEY (citizen_id)
-      REFERENCES citizen(id)
+      REFERENCES SCHEMA_NAME.citizen(id)
       ON DELETE SET NULL,
     CONSTRAINT fk_user
       FOREIGN KEY (app_user_id)
-      REFERENCES app_user(id)
+      REFERENCES SCHEMA_NAME.app_user(id)
       ON DELETE RESTRICT
 );
 
-CREATE TABLE IF NOT EXISTS reading (
+CREATE TABLE IF NOT EXISTS SCHEMA_NAME.reading (
     id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     sensor_id INTEGER NOT NULL,
     value JSONB NOT NULL,
@@ -98,26 +92,26 @@ CREATE TABLE IF NOT EXISTS reading (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_sensor
       FOREIGN KEY (sensor_id)
-      REFERENCES sensor(id)
+      REFERENCES SCHEMA_NAME.sensor(id)
       ON DELETE CASCADE
 );
 
-CREATE TABLE IF NOT EXISTS vehicle_citizen (
+CREATE TABLE IF NOT EXISTS SCHEMA_NAME.vehicle_citizen (
     id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     vehicle_id INTEGER NOT NULL,
     citizen_id INTEGER NOT NULL,
     UNIQUE (vehicle_id, citizen_id),
     CONSTRAINT fk_vehicle
       FOREIGN KEY (vehicle_id)
-      REFERENCES vehicle(id)
+      REFERENCES SCHEMA_NAME.vehicle(id)
       ON DELETE CASCADE,
     CONSTRAINT fk_citizen
       FOREIGN KEY (citizen_id)
-      REFERENCES citizen(id)
+      REFERENCES SCHEMA_NAME.citizen(id)
       ON DELETE RESTRICT
 );
 
-CREATE TABLE IF NOT EXISTS traffic_incident (
+CREATE TABLE IF NOT EXISTS SCHEMA_NAME.traffic_incident (
     id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     vehicle_id INTEGER,
     sensor_id INTEGER NOT NULL,
@@ -128,15 +122,15 @@ CREATE TABLE IF NOT EXISTS traffic_incident (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_vehicle
       FOREIGN KEY (vehicle_id)
-      REFERENCES vehicle(id)
+      REFERENCES SCHEMA_NAME.vehicle(id)
       ON DELETE SET NULL,
     CONSTRAINT fk_sensor
       FOREIGN KEY (sensor_id)
-      REFERENCES sensor(id)
+      REFERENCES SCHEMA_NAME.sensor(id)
       ON DELETE CASCADE
 );
 
-CREATE TABLE IF NOT EXISTS fine (
+CREATE TABLE IF NOT EXISTS SCHEMA_NAME.fine (
     id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     traffic_incident_id INTEGER NOT NULL,
     citizen_id INTEGER NOT NULL,
@@ -151,15 +145,15 @@ CREATE TABLE IF NOT EXISTS fine (
     ),
     CONSTRAINT fk_traffic_incident
       FOREIGN KEY (traffic_incident_id)
-      REFERENCES traffic_incident(id)
+      REFERENCES SCHEMA_NAME.traffic_incident(id)
       ON DELETE CASCADE,
     CONSTRAINT fk_citizen
       FOREIGN KEY (citizen_id)
-      REFERENCES citizen(id)
+      REFERENCES SCHEMA_NAME.citizen(id)
       ON DELETE CASCADE
 );  
 
-CREATE TABLE IF NOT EXISTS fine_payment (
+CREATE TABLE IF NOT EXISTS SCHEMA_NAME.fine_payment (
     id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     fine_id INTEGER NOT NULL,
     amount_paid NUMERIC(10,2) NOT NULL,
@@ -170,12 +164,12 @@ CREATE TABLE IF NOT EXISTS fine_payment (
     CONSTRAINT chk_amount_paid CHECK (amount_paid >= 0),
     CONSTRAINT fk_fine
       FOREIGN KEY (fine_id)
-      REFERENCES fine(id)
+      REFERENCES SCHEMA_NAME.fine(id)
       ON DELETE CASCADE
 );
 
 
-CREATE TABLE IF NOT EXISTS app_user_notification (
+CREATE TABLE IF NOT EXISTS SCHEMA_NAME.app_user_notification (
     id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     notification_id INTEGER NOT NULL,
     app_user_id INTEGER NOT NULL,
@@ -185,15 +179,15 @@ CREATE TABLE IF NOT EXISTS app_user_notification (
     UNIQUE (notification_id, app_user_id),
     CONSTRAINT fk_notification
       FOREIGN KEY (notification_id)
-      REFERENCES notification(id)
+      REFERENCES SCHEMA_NAME.notification(id)
       ON DELETE CASCADE,
     CONSTRAINT fk_app_user
       FOREIGN KEY (app_user_id)
-      REFERENCES app_user(id)
+      REFERENCES SCHEMA_NAME.app_user(id)
       ON DELETE CASCADE
 );
 
-CREATE TABLE IF NOT EXISTS audit_log (
+CREATE TABLE IF NOT EXISTS SCHEMA_NAME.audit_log (
     id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     table_name VARCHAR(100) NOT NULL,
     operation VARCHAR(10) NOT NULL,
@@ -208,11 +202,11 @@ CREATE TABLE IF NOT EXISTS audit_log (
     ),
     CONSTRAINT fk_affected_user
       FOREIGN KEY (app_user_id)
-      REFERENCES app_user(id)
+      REFERENCES SCHEMA_NAME.app_user(id)
       ON DELETE SET NULL,
     CONSTRAINT fk_performed_by_user
       FOREIGN KEY (performed_by_app_user_id)
-      REFERENCES app_user(id)
+      REFERENCES SCHEMA_NAME.app_user(id)
       ON DELETE SET NULL
 );
 

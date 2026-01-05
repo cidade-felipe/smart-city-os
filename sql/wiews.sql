@@ -1,19 +1,19 @@
-CREATE VIEW citizen_active AS
+CREATE OR REPLACE VIEW SCHEMA_NAME.citizen_active AS
 SELECT *
-FROM citizen
+FROM SCHEMA_NAME.citizen
 WHERE deleted_at IS NULL;
 
-CREATE VIEW vehicle_active AS
+CREATE OR REPLACE VIEW SCHEMA_NAME.vehicle_active AS
 SELECT *
-FROM vehicle
+FROM SCHEMA_NAME.vehicle
 WHERE deleted_at IS NULL;
 
-CREATE VIEW sensor_active AS
+CREATE OR REPLACE VIEW SCHEMA_NAME.sensor_active AS
 SELECT *
-FROM sensor
+FROM SCHEMA_NAME.sensor
 WHERE deleted_at IS NULL;
 
-CREATE VIEW app_user_active AS
+CREATE OR REPLACE VIEW SCHEMA_NAME.app_user_active AS
 SELECT *
-FROM app_user
+FROM SCHEMA_NAME.app_user
 WHERE deleted_at IS NULL;
