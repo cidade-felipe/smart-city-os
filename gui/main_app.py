@@ -1,4 +1,5 @@
 import tkinter as tk
+from tkinter import ttk
 from tkinter import ttk, messagebox, scrolledtext
 import sys
 import os
@@ -16,6 +17,7 @@ from tabulate import tabulate
 from dotenv import load_dotenv
 from gui.styles import SmartCityStyles
 import io
+from PIL import Image, ImageTk
 
 # Carregar variáveis de ambiente
 load_dotenv()
@@ -136,25 +138,17 @@ class SmartCityOSGUI:
         header_content = tk.Frame(header_frame, bg=self.styles.colors['primary'])
         header_content.pack(fill=tk.BOTH, expand=True, padx=20, pady=15)
         
+        logo_img = Image.open(r'gui\img\logo.png')
+        logo_img.thumbnail((100,100), Image.LANCZOS)
+        self.logo = ImageTk.PhotoImage(logo_img)
+
         # Frame esquerdo - Logo e título
         left_frame = tk.Frame(header_content, bg=self.styles.colors['primary'])
         left_frame.pack(side=tk.LEFT, fill=tk.Y)
-        
+                
         # Logo (simulado com texto estilizado)
-        logo_label = tk.Label(left_frame, text="🏙️", bg=self.styles.colors['primary'], 
-                              fg=self.styles.colors['white'], font=('Segoe UI', 32))
+        logo_label = tk.Label(left_frame, image=self.logo,bg=self.styles.colors['primary'])
         logo_label.pack(side=tk.TOP, anchor='w')
-        
-        # Título principal
-        title_label = tk.Label(left_frame, text="SmartCityOS", bg=self.styles.colors['primary'],
-                              fg=self.styles.colors['white'], font=self.styles.fonts['title'])
-        title_label.pack(side=tk.TOP, anchor='w', pady=(5, 0))
-        
-        # Subtítulo
-        subtitle_label = tk.Label(left_frame, text="Sistema Operacional Inteligente para Cidades",
-                                 bg=self.styles.colors['primary'], fg=self.styles.colors['light'],
-                                 font=self.styles.fonts['normal'])
-        subtitle_label.pack(side=tk.TOP, anchor='w')
         
         # Frame direito - Status e conexão
         right_frame = tk.Frame(header_content, bg=self.styles.colors['primary'])
@@ -225,7 +219,7 @@ class SmartCityOSGUI:
                 bg_color = self.styles.colors['secondary']
                 fg_color = self.styles.colors['white']
             elif style_type == "secondary":
-                bg_color = self.styles.colors['light']
+                bg_color = self.styles.colors['white']
                 fg_color = self.styles.colors['text_primary']
             else:
                 bg_color = self.styles.colors['white']
@@ -279,65 +273,6 @@ class SmartCityOSGUI:
         self.datetime_label.config(text=now)
         self.root.after(1000, self.update_datetime)
         
-    def check_connection(self):
-        try:
-            # Usar a mesma lógica da função connect_to_db
-            conn_info = self.get_connection_string()
-            
-            # Testar conexão e armazenar
-            self.conn = psycopg2.connect(conn_info)
-            
-            # Testar se funciona
-            with self.conn.cursor() as cur:
-                cur.execute("SELECT version()")
-                version = cur.fetchone()
-                    
-            self.connected = True
-            self.connection_status.config(text="🟢 Conectado")
-            self.connect_btn.config(text="Desconectar")
-            self.status_label.config(text=f"Conectado ao PostgreSQL - {version[0].split(',')[0]}")
-            
-        except psycopg2.Error as e:
-            self.connected = False
-            self.conn = None
-            self.connection_status.config(text="🔴 Desconectado")
-            self.connect_btn.config(text="Conectar")
-            self.status_label.config(text=f"Erro de conexão PostgreSQL: {str(e)}")
-        except Exception as e:
-            self.connected = False
-            self.conn = None
-            self.connection_status.config(text="🔴 Desconectado")
-            self.connect_btn.config(text="Conectar")
-            self.status_label.config(text=f"Erro de conexão: {str(e)}")
-            
-    def get_connection_string(self):
-        """Retorna string de conexão com o banco usando a mesma lógica do connect_to_db"""
-        DB_NAME = os.getenv('DB_NAME')
-        DB_USER = os.getenv('DB_USER')
-        DB_PASSWORD = os.getenv('DB_PASSWORD')
-        DB_HOST = os.getenv('DB_HOST')
-        
-        if not all([DB_NAME, DB_USER, DB_PASSWORD, DB_HOST]):
-            raise Exception("Variáveis de ambiente do banco não configuradas")
-        
-        return f"dbname={DB_NAME} user={DB_USER} password={DB_PASSWORD} host={DB_HOST}"
-            
-    def toggle_connection(self):
-        if self.connected:
-            # Fechar conexão
-            if self.conn:
-                try:
-                    self.conn.close()
-                except:
-                    pass
-            self.connected = False
-            self.conn = None
-            self.connection_status.config(text="🔴 Desconectado")
-            self.connect_btn.config(text="Conectar")
-            self.status_label.config(text="Desconectado do banco de dados")
-        else:
-            self.check_connection()
-            
     def clear_content(self):
         for widget in self.content_frame.winfo_children():
             widget.destroy()
@@ -364,8 +299,9 @@ class SmartCityOSGUI:
         center_frame = tk.Frame(welcome_frame, bg=self.styles.colors['card'], relief='solid', bd=1)
         center_frame.pack(expand=True, fill=tk.BOTH, pady=50)
         
+        
         # Logo e título
-        logo_label = tk.Label(center_frame, text="🏙️", bg=self.styles.colors['card'],
+        logo_label = tk.Label(center_frame, image=self.logo, bg=self.styles.colors['card'],
                               fg=self.styles.colors['primary'], font=('Segoe UI', 48))
         logo_label.pack(pady=(30, 10))
         
@@ -418,7 +354,7 @@ class SmartCityOSGUI:
                     stats = {}
                     
                     # Usuários
-                    cur.execute("SELECT COUNT(*) as total, COUNT(CASE WHEN created_at >= CURRENT_DATE - INTERVAL '30 days' THEN 1 END) as this_month FROM app_user")
+                    cur.execute("SELECT COUNT(*) as total, COUNT(CASE WHEN created_at >= CURRENT_DATE - INTERVAL '30 days' THEN 1 END) as this_month FROM app_user_active")
                     user_stats = cur.fetchone()
                     stats['users'] = user_stats
                     
@@ -569,7 +505,7 @@ class SmartCityOSGUI:
                     # Query para usuários (apenas credenciais)
                     cur.execute("""
                         SELECT id, username, created_at, updated_at
-                        FROM app_user
+                        FROM app_user_active
                         ORDER BY username
                     """)
                     users = cur.fetchall()
@@ -2547,15 +2483,7 @@ class SmartCityOSGUI:
                                        padx=15, pady=8, cursor='hand2')
             export_excel_btn.pack(side=tk.LEFT, padx=(5, 0))
             
-            # Botão para abrir versão interativa
-            interactive_btn = tk.Button(filters_frame, text=" Versão Interativa", 
-                                      command=lambda: self.export_dashboard_html(),
-                                      bg=self.styles.colors['secondary'], fg=self.styles.colors['white'],
-                                      font=self.styles.fonts['button'], relief='flat',
-                                      padx=15, pady=8, cursor='hand2')
-            interactive_btn.pack(side=tk.LEFT, padx=(5, 0))
-            
-            # Frame principal para gráficos inline
+           # Frame principal para gráficos inline
             charts_frame = tk.Frame(self.content_frame, bg=self.styles.colors['background'])
             charts_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
             
@@ -3890,37 +3818,6 @@ class SmartCityOSGUI:
             import traceback
             print(f"Erro completo: {traceback.format_exc()}")
     
-    def export_dashboard_html(self):
-        """Exporta dashboard para HTML com Plotly"""
-        try:
-            import tempfile
-            import webbrowser
-            from tkinter import filedialog
-            
-            if not hasattr(self, 'current_figure'):
-                messagebox.showwarning("Aviso", "Nenhum dashboard para exportar. Gere o dashboard primeiro!")
-                return
-            
-            # File dialog para salvar
-            file_path = filedialog.asksaveasfilename(
-                title="Exportar Dashboard para HTML",
-                defaultextension=".html",
-                filetypes=[("Arquivo HTML (*.html)", "*.html"), ("Todos os Arquivos", "*.*")],
-                initialfile=f"dashboard_smartcity_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
-            )
-            
-            if not file_path:
-                return
-            
-            # Usar a figura já criada em create_plotly_charts
-            self.current_figure.write_html(file_path, include_plotlyjs='cdn')
-            
-            messagebox.showinfo("Sucesso", f"Dashboard exportado para HTML:\n{file_path}")
-            
-            # Perguntar se quer abrir no navegador
-        except Exception as e:
-            messagebox.showerror("Erro", f"Erro ao exportar HTML: {str(e)}")
-    
     def create_interactive_charts(self, parent, period, chart_type):
         """Cria gráficos interativos com Plotly"""
         try:
@@ -4452,7 +4349,7 @@ class SmartCityOSGUI:
                 SELECT COUNT(*) as total,
                        COUNT(CASE WHEN created_at >= CURRENT_DATE - INTERVAL '30 days' THEN 1 END) as this_month,
                        COUNT(CASE WHEN created_at >= CURRENT_DATE - INTERVAL '7 days' THEN 1 END) as this_week
-                FROM app_user
+                FROM app_user_active
             """)
             stats['users'] = cur.fetchone()
         except Exception as e:
@@ -5121,7 +5018,7 @@ class SmartCityOSGUI:
         
         # Inserir texto inicial
         self.sql_text.insert(tk.END, "-- Digite sua consulta SQL aqui\n")
-        self.sql_text.insert(tk.END, "SELECT * FROM app_user LIMIT 10;")
+        self.sql_text.insert(tk.END, "SELECT * FROM app_user_active LIMIT 10;")
         self.sql_text.tag_add("comment", "1.0", "1.end")
         self.sql_text.tag_config("comment", foreground='#616E88')
         
@@ -5362,8 +5259,6 @@ class SmartCityOSGUI:
             for item in self.results_tree.get_children():
                 self.results_tree.delete(item)
             
-            self.results_info.config(text=f"❌ Erro SQL: {str(e)}")
-            messagebox.showerror("Erro SQL", f"Erro ao executar consulta: {str(e)}\n\n🔄 Rollback automático realizado!")
         except Exception as e:
             # Rollback automático em caso de erro
             try:
@@ -5449,39 +5344,6 @@ class SmartCityOSGUI:
         
         canvas.bind('<Enter>', _bind_to_mousewheel)
         canvas.bind('<Leave>', _unbind_from_mousewheel)
-        
-        # Seção de Configurações do Banco
-        db_frame = tk.LabelFrame(scrollable_frame, text="🗄️ Configurações do Banco de Dados", 
-                                 bg=self.styles.colors['card'], fg=self.styles.colors['text_primary'],
-                                 font=self.styles.fonts['heading'], relief='solid', bd=1)
-        db_frame.pack(fill=tk.X, pady=(0, 15))
-        
-        # Configurações do banco em grid
-        db_grid = tk.Frame(db_frame, bg=self.styles.colors['card'])
-        db_grid.pack(fill=tk.X, padx=10, pady=8)
-        
-        # Host do Banco
-        tk.Label(db_grid, text="Host:", bg=self.styles.colors['card'], 
-                fg=self.styles.colors['text_primary'], font=self.styles.fonts['normal']).grid(row=0, column=0, sticky='w', pady=2)
-        self.host_entry = tk.Entry(db_grid, bg=self.styles.colors['white'], 
-                                  fg=self.styles.colors['text_primary'], font=self.styles.fonts['normal'])
-        self.host_entry.grid(row=0, column=1, sticky='ew', padx=(10, 0), pady=2)
-        
-        # Porta do Banco
-        tk.Label(db_grid, text="Porta:", bg=self.styles.colors['card'], 
-                fg=self.styles.colors['text_primary'], font=self.styles.fonts['normal']).grid(row=1, column=0, sticky='w', pady=2)
-        self.port_entry = tk.Entry(db_grid, bg=self.styles.colors['white'], 
-                                  fg=self.styles.colors['text_primary'], font=self.styles.fonts['normal'], width=10)
-        self.port_entry.grid(row=1, column=1, sticky='w', padx=(10, 0), pady=2)
-        
-        # Nome do Banco
-        tk.Label(db_grid, text="Banco:", bg=self.styles.colors['card'], 
-                fg=self.styles.colors['text_primary'], font=self.styles.fonts['normal']).grid(row=2, column=0, sticky='w', pady=2)
-        self.dbname_entry = tk.Entry(db_grid, bg=self.styles.colors['white'], 
-                                    fg=self.styles.colors['text_primary'], font=self.styles.fonts['normal'])
-        self.dbname_entry.grid(row=2, column=1, sticky='ew', padx=(10, 0), pady=2)
-        
-        db_grid.columnconfigure(1, weight=1)
         
         # Seção de Preferências da Interface
         ui_frame = tk.LabelFrame(scrollable_frame, text="🎨 Preferências da Interface", 
@@ -5578,6 +5440,65 @@ PostgreSQL: 18.0
                              justify=tk.LEFT, height=5)
         info_label.pack(padx=10, pady=(0, 10))
     
+    def check_connection(self):
+        try:
+            # Usar a mesma lógica da função connect_to_db
+            conn_info = self.get_connection_string()
+            
+            # Testar conexão e armazenar
+            self.conn = psycopg2.connect(conn_info)
+            
+            # Testar se funciona
+            with self.conn.cursor() as cur:
+                cur.execute("SELECT version()")
+                version = cur.fetchone()
+                    
+            self.connected = True
+            self.connection_status.config(text="🟢 Conectado")
+            self.connect_btn.config(text="Desconectar")
+            self.status_label.config(text=f"Conectado ao PostgreSQL - {version[0].split(',')[0]}")
+            
+        except psycopg2.Error as e:
+            self.connected = False
+            self.conn = None
+            self.connection_status.config(text="🔴 Desconectado")
+            self.connect_btn.config(text="Conectar")
+            self.status_label.config(text=f"Erro de conexão PostgreSQL: {str(e)}")
+        except Exception as e:
+            self.connected = False
+            self.conn = None
+            self.connection_status.config(text="🔴 Desconectado")
+            self.connect_btn.config(text="Conectar")
+            self.status_label.config(text=f"Erro de conexão: {str(e)}")
+            
+    def get_connection_string(self):
+        """Retorna string de conexão com o banco usando a mesma lógica do connect_to_db"""
+        DB_NAME = os.getenv('DB_NAME')
+        DB_USER = os.getenv('DB_USER')
+        DB_PASSWORD = os.getenv('DB_PASSWORD')
+        DB_HOST = os.getenv('DB_HOST')
+        
+        if not all([DB_NAME, DB_USER, DB_PASSWORD, DB_HOST]):
+            raise Exception("Variáveis de ambiente do banco não configuradas")
+        
+        return f"dbname={DB_NAME} user={DB_USER} password={DB_PASSWORD} host={DB_HOST}"
+            
+    def toggle_connection(self):
+        if self.connected:
+            # Fechar conexão
+            if self.conn:
+                try:
+                    self.conn.close()
+                except:
+                    pass
+            self.connected = False
+            self.conn = None
+            self.connection_status.config(text="🔴 Desconectado")
+            self.connect_btn.config(text="Conectar")
+            self.status_label.config(text="Desconectado do banco de dados")
+        else:
+            self.check_connection()
+
     def load_settings(self):
         """Carrega as configurações salvas do arquivo settings.json"""
         try:
@@ -5882,7 +5803,7 @@ PostgreSQL: 18.0
                 
         except Exception as e:
             messagebox.showerror("Erro", f"❌ Erro ao restaurar: {str(e)}")
-            
+
     def clear_sql(self):
         """Limpa o editor SQL completamente"""
         try:

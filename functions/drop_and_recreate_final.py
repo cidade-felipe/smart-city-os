@@ -131,6 +131,6 @@ if __name__ == "__main__":
     
     if confirm.upper() == 'SIM':
         print("\n🔄 Iniciando processo...")
-        drop_and_recreate_all('db')
+        drop_and_recreate_all('public')
     else:
         print("❌ Operação cancelada pelo usuário.")

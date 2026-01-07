@@ -16,7 +16,7 @@ class SmartCityStyles:
             'success': '#228B22',      # Verde floresta (ForestGreen)
             'warning': '#FF8C00',      # Laranja escuro (DarkOrange)
             'danger': '#DC143C',       # Vermelho para ações destrutivas
-            'light': '#F5F5F5',        # Cinza muito claro (WhiteSmoke)
+            'light': '#DBDBDB',        # Cinza muito claro (WhiteSmoke)
             'dark': '#2F4F4F',         # Cinza escuro (DarkSlateGray)
             'white': '#FFFFFF',        # Branco puro
             'black': '#000000',        # Preto puro
