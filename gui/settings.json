@@ -2,7 +2,8 @@
   "database": {
     "host": "",
     "port": "",
-    "dbname": ""
+    "dbname": "",
+    "dbschema": ""
   },
   "ui": {
     "theme": "Escuro",

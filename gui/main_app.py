@@ -93,10 +93,6 @@ class SmartCityOSGUI:
         self.styles = SmartCityStyles()
         self.styles.configure_styles(self.root)
         
-        # Variáveis de conexão
-        self.conn = None
-        self.connected = False
-        
         # Criar interface
         self.create_widgets()
         
@@ -104,7 +100,66 @@ class SmartCityOSGUI:
         
         # Verificar conexão após criar todos os widgets
         self.check_connection()
+    
+    def check_connection(self):
+        try:
+            # Usar a mesma lógica da função connect_to_db
+            conn_info = self.get_connection_string()
+            
+            # Testar conexão e armazenar
+            self.conn = psycopg2.connect(conn_info)
+            
+            # Testar se funciona
+            with self.conn.cursor() as cur:
+                cur.execute("SELECT version()")
+                version = cur.fetchone()
+                    
+            self.connected = True
+            self.connection_status.config(text="🟢 Conectado")
+            self.connect_btn.config(text="Desconectar")
+            self.status_label.config(text=f"Conectado ao PostgreSQL - {version[0].split(',')[0]}")
+            
+        except psycopg2.Error as e:
+            self.connected = False
+            self.conn = None
+            self.connection_status.config(text="🔴 Desconectado")
+            self.connect_btn.config(text="Conectar")
+            self.status_label.config(text=f"Erro de conexão PostgreSQL: {str(e)}")
+        except Exception as e:
+            self.connected = False
+            self.conn = None
+            self.connection_status.config(text="🔴 Desconectado")
+            self.connect_btn.config(text="Conectar")
+            self.status_label.config(text=f"Erro de conexão: {str(e)}")
+            
+    def get_connection_string(self):
+        """Retorna string de conexão com o banco usando a mesma lógica do connect_to_db"""
+        DB_NAME = os.getenv('DB_NAME')
+        DB_USER = os.getenv('DB_USER')
+        DB_PASSWORD = os.getenv('DB_PASSWORD')
+        DB_HOST = os.getenv('DB_HOST')
         
+        if not all([DB_NAME, DB_USER, DB_PASSWORD, DB_HOST]):
+            raise Exception("Variáveis de ambiente do banco não configuradas")
+        
+        return f"dbname={DB_NAME} user={DB_USER} password={DB_PASSWORD} host={DB_HOST}"
+            
+    def toggle_connection(self):
+        if self.connected:
+            # Fechar conexão
+            if self.conn:
+                try:
+                    self.conn.close()
+                except:
+                    pass
+            self.connected = False
+            self.conn = None
+            self.connection_status.config(text="🔴 Desconectado")
+            self.connect_btn.config(text="Conectar")
+            self.status_label.config(text="Desconectado do banco de dados")
+        else:
+            self.check_connection()
+
     def create_widgets(self):
         # Frame principal
         main_frame = ttk.Frame(self.root, padding="10")
@@ -5439,65 +5494,6 @@ PostgreSQL: 18.0
                              fg=self.styles.colors['text_secondary'], font=self.styles.fonts['small'],
                              justify=tk.LEFT, height=5)
         info_label.pack(padx=10, pady=(0, 10))
-    
-    def check_connection(self):
-        try:
-            # Usar a mesma lógica da função connect_to_db
-            conn_info = self.get_connection_string()
-            
-            # Testar conexão e armazenar
-            self.conn = psycopg2.connect(conn_info)
-            
-            # Testar se funciona
-            with self.conn.cursor() as cur:
-                cur.execute("SELECT version()")
-                version = cur.fetchone()
-                    
-            self.connected = True
-            self.connection_status.config(text="🟢 Conectado")
-            self.connect_btn.config(text="Desconectar")
-            self.status_label.config(text=f"Conectado ao PostgreSQL - {version[0].split(',')[0]}")
-            
-        except psycopg2.Error as e:
-            self.connected = False
-            self.conn = None
-            self.connection_status.config(text="🔴 Desconectado")
-            self.connect_btn.config(text="Conectar")
-            self.status_label.config(text=f"Erro de conexão PostgreSQL: {str(e)}")
-        except Exception as e:
-            self.connected = False
-            self.conn = None
-            self.connection_status.config(text="🔴 Desconectado")
-            self.connect_btn.config(text="Conectar")
-            self.status_label.config(text=f"Erro de conexão: {str(e)}")
-            
-    def get_connection_string(self):
-        """Retorna string de conexão com o banco usando a mesma lógica do connect_to_db"""
-        DB_NAME = os.getenv('DB_NAME')
-        DB_USER = os.getenv('DB_USER')
-        DB_PASSWORD = os.getenv('DB_PASSWORD')
-        DB_HOST = os.getenv('DB_HOST')
-        
-        if not all([DB_NAME, DB_USER, DB_PASSWORD, DB_HOST]):
-            raise Exception("Variáveis de ambiente do banco não configuradas")
-        
-        return f"dbname={DB_NAME} user={DB_USER} password={DB_PASSWORD} host={DB_HOST}"
-            
-    def toggle_connection(self):
-        if self.connected:
-            # Fechar conexão
-            if self.conn:
-                try:
-                    self.conn.close()
-                except:
-                    pass
-            self.connected = False
-            self.conn = None
-            self.connection_status.config(text="🔴 Desconectado")
-            self.connect_btn.config(text="Conectar")
-            self.status_label.config(text="Desconectado do banco de dados")
-        else:
-            self.check_connection()
 
     def load_settings(self):
         """Carrega as configurações salvas do arquivo settings.json"""
