@@ -1,0 +1,15 @@
+{
+  "database": {
+    "host": "",
+    "port": "",
+    "dbname": ""
+  },
+  "ui": {
+    "theme": "Escuro",
+    "language": "Portugu\u00eas"
+  },
+  "system": {
+    "autosave": true,
+    "notifications": true
+  }
+}

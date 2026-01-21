@@ -2489,14 +2489,6 @@ class SmartCityOSGUI:
                                        padx=15, pady=8, cursor='hand2')
             export_excel_btn.pack(side=tk.LEFT, padx=(5, 0))
             
-            # Botão para abrir versão interativa
-            interactive_btn = tk.Button(filters_frame, text=" Versão Interativa", 
-                                      command=lambda: self.export_dashboard_html(),
-                                      bg=self.styles.colors['secondary'], fg=self.styles.colors['white'],
-                                      font=self.styles.fonts['button'], relief='flat',
-                                      padx=15, pady=8, cursor='hand2')
-            interactive_btn.pack(side=tk.LEFT, padx=(5, 0))
-            
             # Frame principal para gráficos inline
             charts_frame = tk.Frame(self.content_frame, bg=self.styles.colors['background'])
             charts_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
@@ -3290,16 +3282,6 @@ class SmartCityOSGUI:
                 interactive_frame = tk.Frame(parent, bg=self.styles.colors['background'])
                 interactive_frame.pack(fill=tk.X, pady=(0, 10))
                 
-                # interactive_btn = tk.Button(interactive_frame, 
-                #                          text="🌐 Abrir Versão Interativa (Navegador)",
-                #                          command=lambda: self.open_interactive_dashboard(),
-                #                          bg=self.styles.colors['primary'], 
-                #                          fg=self.styles.colors['white'],
-                #                          font=self.styles.fonts['button'], 
-                #                          relief='flat',
-                #                          padx=20, pady=10, cursor='hand2')
-                # interactive_btn.pack()
-                
                 # Armazenar caminho para limpeza posterior
                 if not hasattr(self, 'temp_files'):
                     self.temp_files = []
@@ -3831,37 +3813,6 @@ class SmartCityOSGUI:
             messagebox.showerror("❌ Erro", f"Erro ao exportar relatório: {str(e)}")
             import traceback
             print(f"Erro completo: {traceback.format_exc()}")
-    
-    def export_dashboard_html(self):
-        """Exporta dashboard para HTML com Plotly"""
-        try:
-            import tempfile
-            import webbrowser
-            from tkinter import filedialog
-            
-            if not hasattr(self, 'current_figure'):
-                messagebox.showwarning("Aviso", "Nenhum dashboard para exportar. Gere o dashboard primeiro!")
-                return
-            
-            # File dialog para salvar
-            file_path = filedialog.asksaveasfilename(
-                title="Exportar Dashboard para HTML",
-                defaultextension=".html",
-                filetypes=[("Arquivo HTML (*.html)", "*.html"), ("Todos os Arquivos", "*.*")],
-                initialfile=f"dashboard_smartcity_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
-            )
-            
-            if not file_path:
-                return
-            
-            # Usar a figura já criada em create_plotly_charts
-            self.current_figure.write_html(file_path, include_plotlyjs='cdn')
-            
-            messagebox.showinfo("Sucesso", f"Dashboard exportado para HTML:\n{file_path}")
-            
-            # Perguntar se quer abrir no navegador
-        except Exception as e:
-            messagebox.showerror("Erro", f"Erro ao exportar HTML: {str(e)}")
     
     def create_interactive_charts(self, parent, period, chart_type):
         """Cria gráficos interativos com Plotly"""
@@ -5392,48 +5343,6 @@ class SmartCityOSGUI:
         canvas.bind('<Enter>', _bind_to_mousewheel)
         canvas.bind('<Leave>', _unbind_from_mousewheel)
         
-        # Seção de Configurações do Banco
-        db_frame = tk.LabelFrame(scrollable_frame, text="🗄️ Configurações do Banco de Dados", 
-                                 bg=self.styles.colors['card'], fg=self.styles.colors['text_primary'],
-                                 font=self.styles.fonts['heading'], relief='solid', bd=1)
-        db_frame.pack(fill=tk.X, pady=(0, 15))
-        
-        # Configurações do banco em grid
-        db_grid = tk.Frame(db_frame, bg=self.styles.colors['card'])
-        db_grid.pack(fill=tk.X, padx=10, pady=8)
-        
-        # Host do Banco
-        tk.Label(db_grid, text="Host:", bg=self.styles.colors['card'], 
-                fg=self.styles.colors['text_primary'], font=self.styles.fonts['normal']).grid(row=0, column=0, sticky='w', pady=2)
-        self.host_entry = tk.Entry(db_grid, bg=self.styles.colors['white'], 
-                                  fg=self.styles.colors['text_primary'], font=self.styles.fonts['normal'], width=15)
-        self.host_entry.grid(row=0, column=1, sticky='w', padx=(10, 0), pady=2)
-        
-        # Porta do Banco
-        tk.Label(db_grid, text="Porta:", bg=self.styles.colors['card'], 
-                fg=self.styles.colors['text_primary'], font=self.styles.fonts['normal']).grid(row=1, column=0, sticky='w', pady=2)
-        self.port_entry = tk.Entry(db_grid, bg=self.styles.colors['white'], 
-                                  fg=self.styles.colors['text_primary'], font=self.styles.fonts['normal'], width=15)
-        self.port_entry.grid(row=1, column=1, sticky='w', padx=(10, 0), pady=2)
-        
-        # Nome do Banco
-        tk.Label(db_grid, text="Banco:", bg=self.styles.colors['card'], 
-                fg=self.styles.colors['text_primary'], font=self.styles.fonts['normal']).grid(row=2, column=0, sticky='w', pady=2)
-        self.dbname_entry = tk.Entry(db_grid, bg=self.styles.colors['white'], 
-                                    fg=self.styles.colors['text_primary'], font=self.styles.fonts['normal'], width=15)
-        self.dbname_entry.grid(row=2, column=1, sticky='w', padx=(10, 0), pady=2)
-        
-        db_grid.columnconfigure(1, weight=1)
-        
-        # Senha do banco
-        tk.Label(db_grid, text="Senha:", bg=self.styles.colors['card'], 
-                fg=self.styles.colors['text_primary'], font=self.styles.fonts['normal']).grid(row=3, column=0, sticky='w', pady=2)
-        self.password_entry = tk.Entry(db_grid, bg=self.styles.colors['white'], 
-                                      fg=self.styles.colors['text_primary'], font=self.styles.fonts['normal'], show='*', width=15)
-        self.password_entry.grid(row=3, column=1, sticky='w', padx=(10, 0), pady=2)
-        
-        db_grid.columnconfigure(1, weight=1)
-
         # Seção de Preferências da Interface
         ui_frame = tk.LabelFrame(scrollable_frame, text="🎨 Preferências da Interface", 
                                  bg=self.styles.colors['card'], fg=self.styles.colors['text_primary'],
@@ -5641,9 +5550,9 @@ PostgreSQL: 18.0
             # Coletar configurações
             settings = {
                 'database': {
-                    'host': self.host_entry.get(),
-                    'port': self.port_entry.get(),
-                    'dbname': self.dbname_entry.get()
+                    'host': '',
+                    'port': '',
+                    'dbname': ''
                 },
                 'ui': {
                     'theme': self.theme_var.get(),

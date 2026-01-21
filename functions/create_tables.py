@@ -43,7 +43,7 @@ if __name__ == "__main__":
     from conect_db import connect_to_db
     file = r"sql\create_tables.sql"
     conn_info = connect_to_db()
-    created_tables = create_tables(conn_info, file,'db')
+    created_tables = create_tables(conn_info, file,'public')
     for table in created_tables:
         print(f'Creating table: {table}')
     
