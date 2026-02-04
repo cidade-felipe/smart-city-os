@@ -1,0 +1,13 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "SmartCityOS GUI",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/gui_runner.py",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    }
+  ]
+}

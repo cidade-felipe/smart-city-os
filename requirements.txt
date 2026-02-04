@@ -10,6 +10,9 @@ plotly==6.5.0
 kaleido==1.2.0
 Pillow==12.1.0
 
+# PySide6 - Interface Desktop (Qt)
+PySide6
+
 # Dash GUI v1.1 - Interface Web
 dash==2.18.2
 dash-bootstrap-components==1.6.0

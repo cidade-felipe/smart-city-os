@@ -9,12 +9,13 @@ O SmartCityOS é um sistema de gestão urbana inteligente desenvolvido em Python
 ## 🏗️ Arquitetura
 
 - **Backend**: Python 3.12+ com PostgreSQL 18.0
-- **Bibliotecas**: psycopg, pandas, python-dotenv, tabulate
+- **Bibliotecas**: psycopg, pandas, python-dotenv, tabulate, PySide6
+- **GUI**: Desktop em Qt (PySide6)
 - **Estrutura**: Notebook Jupyter para desenvolvimento e scripts SQL para banco de dados
 
 ## 🗄️ Modelo de Dados
 
-### Tabelas Principais (12)
+### Tabelas Principais (13)
 
 - **app_user**: Usuários do sistema com autenticação
 - **citizen**: Extensão com carteira digital e controle biométrico
@@ -28,6 +29,7 @@ O SmartCityOS é um sistema de gestão urbana inteligente desenvolvido em Python
 - **app_user_notification**: Relacionamento usuários-notificações
 - **vehicle_citizen**: Relacionamento veículos-cidadãos
 - **audit_log**: Registro completo de auditoria
+- **payment_method**: Métodos de pagamento
 
 ## ⚡ Automação
 
@@ -77,6 +79,15 @@ pip install -r requirements.txt
 # Executar scripts SQL em ordem: create_tables.sql → trigger_functions.sql → triggers.sql → index.sql
 ```
 
+### Configurações Persistentes
+
+Além do `.env`, a GUI salva preferências em `settings.json`:
+- UI: tema e idioma
+- Sistema: autosave e notificações
+- Banco: host, porta, dbname
+
+Ao salvar pela GUI, o sistema sincroniza `DB_HOST`, `DB_PORT` e `DB_NAME` no `.env`.
+
 ## 📊 Funcionalidades
 
 - ✅ Gestão completa de usuários e cidadãos com soft delete
@@ -87,6 +98,8 @@ pip install -r requirements.txt
 - ✅ Sistema de notificações com controle de leitura
 - ✅ Auditoria completa e rastreabilidade de operações
 - ✅ Interface gráfica profissional com dashboard
+- ✅ Console SQL seguro (SELECT-only) com exportação CSV/XLSX
+- ✅ Tela de configurações com backup/restauração
 - ✅ Relatórios Excel com múltiplas abas e gráficos
 - ✅ Proteção de dados com bloqueio de atualização em registros deletados
 
@@ -99,6 +112,11 @@ pip install -r requirements.txt
 - Auditoria completa de operações com usuário e timestamp
 - Proteção contra atualização de registros deletados
 - Logs de acesso para conformidade e forense
+
+## ℹ️ Observações sobre IDs
+
+Os IDs usam `IDENTITY`/sequências do PostgreSQL. Em caso de erro ou rollback,
+é normal haver “saltos” de ID. Isso é esperado e não deve ser tratado como bug.
 
 ## 📝 Documentação Completa
 

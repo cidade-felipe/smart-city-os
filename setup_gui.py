@@ -14,7 +14,7 @@ def check_dependencies():
     print("🔍 Verificando dependências...")
     
     required_packages = [
-        'tkinter',
+        'PySide6',
         'psycopg', 
         'python-dotenv',
         'pandas',
@@ -25,8 +25,8 @@ def check_dependencies():
     
     for package in required_packages:
         try:
-            if package == 'tkinter':
-                import tkinter
+            if package == 'PySide6':
+                import PySide6
             elif package == 'psycopg':
                 import psycopg
             elif package == 'python-dotenv':
@@ -199,12 +199,8 @@ def main():
     
     # Iniciar a GUI
     try:
-        from gui.main_app import SmartCityOSGUI
-        import tkinter as tk
-        
-        root = tk.Tk()
-        app = SmartCityOSGUI(root)
-        root.mainloop()
+        from gui.qt_app import run
+        run()
         
     except Exception as e:
         print(f"❌ Erro ao iniciar GUI: {str(e)}")

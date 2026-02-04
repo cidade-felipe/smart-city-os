@@ -5,24 +5,24 @@ def drop_tables(conn_info, schema):
     try:
         with psycopg.connect(conn_info) as conn:
             with conn.cursor() as cur:
-              cur.execute(
-                  """
-                  SELECT tablename
-                  FROM pg_tables
-                  WHERE schemaname = %s;
-                  """,
-                  (schema,)
-              )
+                cur.execute(
+                    """
+                    SELECT tablename
+                    FROM pg_tables
+                    WHERE schemaname = %s;
+                    """,
+                    (schema,)
+                )
 
-              droped_tables ={row[0] for row in cur.fetchall()}
+                droped_tables ={row[0] for row in cur.fetchall()}
 
-              for table_name in droped_tables:
-                  query = sql.SQL("DROP TABLE IF EXISTS {}.{} CASCADE;").format(
-                      sql.Identifier(schema),
-                      sql.Identifier(table_name)
-                  )
-                  cur.execute(query)
-              return list(droped_tables)
+                for table_name in droped_tables:
+                    query = sql.SQL("DROP TABLE IF EXISTS {}.{} CASCADE;").format(
+                        sql.Identifier(schema),
+                        sql.Identifier(table_name)
+                    )
+                    cur.execute(query)
+                return list(droped_tables)
 
     except Exception as e:
         print(f"Error: {e}")
@@ -43,4 +43,4 @@ if __name__ == "__main__":
     conn_info = connect_to_db()
     delete_tables = drop_tables(conn_info,'public')
     for table in delete_tables:
-      print(f"Dropping table: {table}")
+        print(f"Dropping table: {table}")

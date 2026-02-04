@@ -25,11 +25,15 @@ O SmartCityOS é um sistema de gestão urbana inteligente desenvolvido em Python
   - `pandas` - Manipulação de dados
   - `python-dotenv` - Gestão de variáveis de ambiente
   - `tabulate` - Formatação de tabelas
+  - `PySide6` - Interface gráfica (Qt)
 
 ### Estrutura do Projeto
 
 ```text
 SmartCityOS/
+├── .vscode/                # Configurações do VS Code (debug/run)
+│   ├── launch.json         # Perfil de execução do GUI
+│   └── settings.json       # Interpreter e Code Runner
 ├── notebooks/              # Notebooks Jupyter
 │   └── smart_city_os.ipynb # Notebook principal com funções do sistema
 ├── functions/              # Módulos Python organizados
@@ -51,6 +55,7 @@ SmartCityOS/
 ├── backup/                 # Backups do banco
 ├── venv/                   # Ambiente virtual
 ├── requirements.txt        # Dependências Python
+├── settings.json           # Preferências do app (UI/DB/Sistema)
 ├── DOCUMENTATION.md        # Este documento
 └── README.md               # Documentação principal
 ```
@@ -935,6 +940,18 @@ DB_HOST=localhost
 DB_POOL_URL=postgresql+psycopg2://postgres:sua_senha@localhost:5432/smart_city_os
 ```
 
+### Configurações Persistentes
+
+Além do `.env`, o aplicativo utiliza `settings.json` para armazenar:
+- Preferências de UI (tema/idioma)
+- Preferências de sistema (autosave/notificações)
+- Configuração de banco (host/porta/dbname)
+
+Ao salvar as configurações pela GUI, o sistema:
+- Atualiza `settings.json`
+- Sincroniza `DB_HOST`, `DB_PORT` e `DB_NAME` no `.env`
+- Aplica em runtime via `os.environ` (reconectar para efeito imediato)
+
 ### Instalação
 
 ```bash
@@ -1024,9 +1041,9 @@ pip install psycopg python-dotenv pandas tabulate
 
 ### Tecnologias
 
-- **Framework**: Tkinter com ttk (tema clam)
-- **Estilos**: Sistema de cores e fontes customizadas
-- **Componentes**: Treeviews, Forms, Dialogs modais
+- **Framework**: PySide6 (Qt)
+- **Estilos**: Sistema de cores e fontes customizadas (Qt StyleSheet)
+- **Componentes**: QStackedWidget, QTableWidget, Dialogs modais, QScrollArea
 
 ### Funcionalidades da GUI
 
@@ -1046,17 +1063,25 @@ pip install psycopg python-dotenv pandas tabulate
 
 #### Console SQL Seguro
 
-- Editor com syntax highlighting
+- Editor com tema escuro
 - Execução segura (SELECT apenas)
-- Rollback automático em erros
+- Exportação para CSV/XLSX
 - Suporte a comentários SQL
-- Validação de comandos perigosos
+- Validação de comandos perigosos e bloqueio de tabelas base
 
 #### Sistema de Notificações
 
 - Lista de notificações por usuário
 - Controle de leitura
 - Criação de novas notificações
+
+#### Configurações (GUI)
+
+- Preferências de interface (tema/idioma)
+- Preferências do sistema (autosave/notificações)
+- Configuração de banco (host/porta/dbname)
+- Backup e restauração via interface
+- Persistência em `settings.json` e sincronização com `.env` (DB_NAME/DB_HOST/DB_PORT)
 
 ## Fluxo de Trabalho
 
@@ -1392,6 +1417,23 @@ Para dúvidas e suporte:
 - **Analisar estrutura de tabelas e índices** para otimização
 - **Revisar funções de trigger** para entendimento do fluxo automático
 - **GUI completa** com dashboard interativo e relatórios profissionais
+
+## Observações Importantes (IDs e Contagens)
+
+### IDs com `IDENTITY`/Sequências
+
+O PostgreSQL utiliza sequências para gerar IDs (`GENERATED ALWAYS AS IDENTITY`).
+Mesmo que uma inserção falhe (ex.: CPF duplicado), a sequência já avançou.
+Por isso, **é normal haver “saltos” de ID** (ex.: 1 → erro → 3).
+
+Recomendação:
+- **Não tentar “reaproveitar” IDs** em produção.
+- Caso precise de IDs sem gaps para testes, é possível **resetar sequência manualmente**, mas isso não é seguro em cenários concorrentes.
+
+### Dashboard e Views Ativas
+
+O dashboard utiliza a view `app_user_active` para exibir usuários ativos.
+Isso garante que **usuários deletados logicamente** não apareçam nas contagens.
 
 ## Características do Sistema
 
