@@ -1,12 +1,12 @@
 {
   "database": {
-    "host": "",
-    "port": "",
-    "dbname": ""
+    "host": "localhost",
+    "port": "5432",
+    "dbname": "smart-city-os"
   },
   "ui": {
     "theme": "Escuro",
-    "language": "Portugu\u00eas"
+    "language": "Português"
   },
   "system": {
     "autosave": true,
