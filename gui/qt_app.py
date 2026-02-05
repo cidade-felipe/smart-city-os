@@ -4143,7 +4143,7 @@ class SettingsPage(QWidget):
         ui_layout.setLabelAlignment(Qt.AlignLeft)
 
         self.theme_combo = QComboBox(self.ui_group)
-        self.theme_combo.addItems(["Escuro", "Claro", "Azul"])
+        self.theme_combo.addItems(["Claro", "Escuro"])
         ui_layout.addRow("Tema:", self.theme_combo)
 
         self.language_combo = QComboBox(self.ui_group)
@@ -4272,7 +4272,7 @@ class SettingsPage(QWidget):
                 "port": "5432",
                 "dbname": "smart_city_os",
             },
-            "ui": {"theme": "Escuro", "language": "Português"},
+            "ui": {"theme": "Claro", "language": "Português"},
             "system": {"autosave": True, "notifications": True},
         }
 
