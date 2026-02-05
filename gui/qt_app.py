@@ -3730,7 +3730,7 @@ class SQLPage(QWidget):
             "SELECT type, COUNT(*) FROM sensor_active GROUP BY type ORDER BY COUNT DESC;",
             "SELECT username, created_at FROM app_user_active ORDER BY created_at DESC LIMIT 5;",
             "SELECT * FROM citizen_active WHERE debt > 0 ORDER BY debt DESC;",
-            "SELECT s.type, s.location, COUNT(r.id) as readings FROM sensor_active s LEFT JOIN reading r ON s.id = r.sensor_id GROUP BY s.id;",
+            "SELECT s.type, s.location, COUNT(r.id) as readings FROM sensor_active s LEFT JOIN reading r ON s.id = r.sensor_id GROUP BY s.id, s.type, s.location ORDER BY readings DESC;",
         ]
         self.default_sql = "-- Digite sua consulta SQL aqui\nSELECT * FROM app_user_active LIMIT 10;"
 
