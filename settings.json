@@ -5,7 +5,7 @@
     "dbname": "smart-city-os"
   },
   "ui": {
-    "theme": "Escuro",
+    "theme": "Claro",
     "language": "Português"
   },
   "system": {
