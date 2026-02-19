@@ -3320,7 +3320,7 @@ class StatisticsPage(QWidget):
                        COALESCE(SUM(CASE WHEN status = 'overdue' THEN amount END), 0) as overdue_amount,
                        COALESCE(SUM(CASE WHEN status = 'paid' THEN amount END), 0) as paid_amount,
                        COALESCE(AVG(amount), 0) as avg_amount
-                FROM fine
+                FROM fine;
                 """
             )
             stats["fines"] = cur.fetchone()
@@ -3330,7 +3330,7 @@ class StatisticsPage(QWidget):
                 SELECT status, COUNT(*) as count, COALESCE(SUM(amount), 0) as total_amount
                 FROM fine
                 GROUP BY status
-                ORDER BY count DESC
+                ORDER BY count DESC;
                 """
             )
             stats["fines_by_status"] = cur.fetchall()
@@ -3356,7 +3356,7 @@ class StatisticsPage(QWidget):
                 FROM reading
                 WHERE timestamp >= CURRENT_DATE - INTERVAL '7 days'
                 GROUP BY DATE(timestamp)
-                ORDER BY date
+                ORDER BY date;
                 """
             )
             stats["readings_last_7_days"] = cur.fetchall()
